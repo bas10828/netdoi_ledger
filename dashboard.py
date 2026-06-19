@@ -6,15 +6,18 @@ Run:
   uvicorn dashboard:app --host 0.0.0.0 --port 8081
 """
 
+import io
 import os
 from collections import defaultdict
+from datetime import date
 
 import bcrypt
+import pandas as pd
 import psycopg2
 import psycopg2.extras
 from dotenv import load_dotenv
 from fastapi import FastAPI, Form, HTTPException, Request
-from fastapi.responses import FileResponse, RedirectResponse
+from fastapi.responses import FileResponse, RedirectResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
 from linebot.v3.messaging import ApiClient, Configuration, MessagingApi
 from starlette.middleware.sessions import SessionMiddleware
@@ -162,6 +165,87 @@ def dashboard(request: Request):
             "ai_balance": ai_starting_balance - ai_spent,
             "ai_starting_balance": ai_starting_balance,
         },
+    )
+
+
+@app.get("/export/excel")
+def export_excel(
+    request: Request,
+    direction: str = "",
+    date_from: str = "",
+    date_to: str = "",
+    bank: str = "",
+    status: str = "",
+    name: str = "",
+):
+    redirect = require_login(request)
+    if redirect:
+        return redirect
+
+    where = []
+    params = []
+    if direction:
+        where.append("direction = ANY(%s)")
+        params.append(direction.split(","))
+    if date_from:
+        where.append("txn_date >= %s")
+        params.append(date_from)
+    if date_to:
+        where.append("txn_date <= %s")
+        params.append(date_to)
+    if bank:
+        where.append("bank = %s")
+        params.append(bank)
+    if status == "verified":
+        where.append("verified_bank = true")
+    elif status == "unverified":
+        where.append("verified_bank = false")
+    elif status == "dup":
+        where.append("""qr_trans_ref IN (
+            SELECT qr_trans_ref FROM slip_transactions
+            WHERE qr_trans_ref IS NOT NULL GROUP BY qr_trans_ref HAVING COUNT(*) > 1
+        )""")
+    if name:
+        where.append("(sender_name ILIKE %s OR receiver_name ILIKE %s)")
+        params.extend([f"%{name}%", f"%{name}%"])
+
+    query = """
+        SELECT
+            txn_date AS "วันที่", txn_time AS "เวลา", bank AS "ธนาคาร",
+            direction AS "ประเภท", amount AS "ยอดเงิน", fee AS "ค่าธรรมเนียม",
+            sender_name AS "ผู้โอน", receiver_name AS "ผู้รับ", memo AS "รายละเอียด",
+            qr_trans_ref AS "เลขอ้างอิง (QR)", verified_bank AS "ยืนยันธนาคาร"
+        FROM slip_transactions
+    """
+    if where:
+        query += " WHERE " + " AND ".join(where)
+    query += " ORDER BY txn_date, txn_time"
+
+    conn = db()
+    try:
+        df = pd.read_sql(query, conn, params=params)
+    finally:
+        conn.close()
+
+    summary = (
+        df.groupby("ประเภท")["ยอดเงิน"]
+        .sum()
+        .reindex(["expense", "income", "unknown"])
+        .fillna(0)
+        .rename({"expense": "รายจ่าย", "income": "รายรับ", "unknown": "ไม่ระบุ"})
+    )
+
+    buf = io.BytesIO()
+    with pd.ExcelWriter(buf, engine="openpyxl") as writer:
+        df.to_excel(writer, sheet_name="รายการ", index=False)
+        summary.to_frame("รวม (บาท)").to_excel(writer, sheet_name="สรุป")
+    buf.seek(0)
+
+    filename = f"ledger_{date.today().isoformat()}.xlsx"
+    return StreamingResponse(
+        buf,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 
 

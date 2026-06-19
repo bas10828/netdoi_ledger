@@ -27,8 +27,9 @@
   header a { color: #cdd9e5; text-decoration: none; font-size: 13px; padding: 6px 12px; border-radius: 6px; transition: background .15s; }
   header a:hover { color: white; background: rgba(255,255,255,0.1); }
   main { padding: 28px 32px; max-width: 1320px; margin: 0 auto; }
-  .cards { display: grid; grid-template-columns: repeat(5, 1fr); gap: 16px; margin-bottom: 24px; }
+  .cards { display: flex; flex-wrap: wrap; gap: 16px; margin-bottom: 24px; }
   .card {
+    flex: 1 1 200px;
     background: white; border-radius: 12px; padding: 18px 20px;
     box-shadow: 0 2px 10px rgba(0,0,0,0.06); border-left: 4px solid #d6dbe1;
     transition: transform .15s, box-shadow .15s;
@@ -59,10 +60,11 @@
   .net { color: #2c70c9; }
   .table-wrap { background: white; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.06); overflow-x: auto; }
   table { width: 100%; border-collapse: collapse; }
-  th, td { padding: 11px 14px; text-align: left; font-size: 13px; border-bottom: 1px solid #f0f2f5; white-space: nowrap; }
-  th { background: #f7f8fa; color: #6b7785; font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: .03em; position: sticky; top: 0; }
+  th, td { padding: 13px 14px; text-align: left; font-size: 13px; border-bottom: 1px solid #f0f2f5; white-space: nowrap; }
+  th { background: #f7f8fa; color: #97a3ad; font-weight: 600; font-size: 11px; letter-spacing: .02em; position: sticky; top: 0; }
+  tbody tr:nth-child(even) { background: #fafbfc; }
   tbody tr { transition: background .1s; }
-  tbody tr:hover { background: #f7f9fb; }
+  tbody tr:hover { background: #eef3fa; }
   tr:last-child td { border-bottom: none; }
   .dir-expense { color: #c0392b; font-weight: 600; }
   .dir-income { color: #1e8449; font-weight: 600; }
@@ -94,12 +96,66 @@
   .dir-select.dir-unknown { color: #b8860b; border-color: #f0dca3; }
   .ref { font-size: 11px; color: #888; font-family: monospace; }
   .dup-badge { font-size: 11px; padding: 2px 8px; border-radius: 10px; background: #ffe6e6; color: #c0392b; margin-left: 4px; font-weight: 600; }
-  tr.dup-1 { background: #fff3e0; }
-  tr.dup-2 { background: #e3f2fd; }
-  tr.dup-3 { background: #f3e5f5; }
-  tr.dup-4 { background: #e8f5e9; }
-  tr.dup-5 { background: #fffde7; }
-  tr.dup-1:hover, tr.dup-2:hover, tr.dup-3:hover, tr.dup-4:hover, tr.dup-5:hover { filter: brightness(0.97); }
+  tr[class*="dup-"] { background: #fff8ec; box-shadow: inset 3px 0 0 #e8a33d; }
+  tr[class*="dup-"]:hover { background: #fff2db; }
+  .filter-bar {
+    display: flex; flex-wrap: wrap; gap: 14px 18px; align-items: end;
+    background: white; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.06);
+    padding: 16px 18px; margin-bottom: 16px;
+  }
+  .filter-bar .field { display: flex; flex-direction: column; gap: 5px; }
+  .filter-bar label { font-size: 11px; color: #97a3ad; font-weight: 600; }
+  .filter-bar input, .filter-bar select {
+    padding: 8px 10px; border: 1px solid #e6e9ec; border-radius: 8px; font-size: 13px;
+    font-family: inherit; min-width: 110px; background: #fafbfc;
+  }
+  .filter-bar input:focus, .filter-bar select:focus { outline: none; border-color: #2c70c9; background: white; }
+  .filter-bar .actions-row { display: flex; gap: 8px; margin-left: auto; align-self: end; }
+  .filter-bar button {
+    padding: 9px 18px; border: none; border-radius: 8px; font-size: 13px; font-weight: 600;
+    cursor: pointer; font-family: inherit;
+  }
+  .filter-bar .btn-apply { background: #2c70c9; color: white; }
+  .filter-bar .btn-apply:hover { background: #235ba3; }
+  .filter-bar .btn-clear { background: #f2f4f6; color: #6b7785; }
+  .filter-bar .btn-clear:hover { background: #e6e9ec; }
+  .filter-bar .btn-export { background: #1e8449; color: white; }
+  .filter-bar .btn-export:hover { background: #186a3a; }
+  tr.hidden-row { display: none; }
+  tr.page-hidden { display: none; }
+  .pagination {
+    display: flex; align-items: center; justify-content: space-between; gap: 14px;
+    margin-top: 14px; font-size: 13px; color: #6b7785;
+  }
+  .pagination .nav { display: flex; align-items: center; gap: 14px; }
+  .pagination .pagesize { display: flex; align-items: center; gap: 8px; }
+  .pagination select {
+    padding: 6px 9px; border: 1px solid #e6e9ec; border-radius: 7px; font-size: 13px; font-family: inherit;
+  }
+  .pagination button {
+    padding: 7px 14px; border: 1px solid #e6e9ec; border-radius: 7px; background: white;
+    font-size: 13px; font-family: inherit; cursor: pointer;
+  }
+  .pagination button:hover { background: #f0f2f5; }
+  .pagination button:disabled { opacity: .4; cursor: default; }
+  @media (max-width: 768px) {
+    header { padding: 14px 16px; flex-wrap: wrap; gap: 8px; }
+    main { padding: 16px; }
+    .card { flex-basis: 140px; }
+    .card .value { font-size: 20px; }
+    .filter-bar { padding: 12px; }
+    .filter-bar .field, .filter-bar input, .filter-bar select { width: 100%; }
+    .filter-bar .actions-row { margin-left: 0; width: 100%; }
+    .filter-bar .actions-row button { flex: 1; }
+    th, td { padding: 9px 10px; font-size: 12px; }
+    .add-btn.chat-btn { margin-left: 0; }
+    .pagination { flex-direction: column; align-items: stretch; gap: 10px; }
+    .pagination .pagesize { justify-content: space-between; }
+    .pagination .nav { justify-content: center; }
+  }
+  @media (max-width: 480px) {
+    header h1 { font-size: 15px; }
+  }
 </style>
 </head>
 <body>
@@ -131,15 +187,65 @@
   <a class="add-btn" href="/transactions/new">+ เพิ่มรายการใหม่</a>
   <a class="add-btn chat-btn" href="/chat">ดูแชตย้อนหลัง</a>
   {% endif %}
+  <div class="filter-bar">
+    <div class="field">
+      <label>ประเภท</label>
+      <select id="f-direction">
+        <option value="">ทั้งหมด</option>
+        <option value="expense,income">ทั้งรับทั้งจ่าย</option>
+        <option value="expense">รายจ่าย</option>
+        <option value="income">รายรับ</option>
+        <option value="unknown">ไม่ทราบ</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>ตั้งแต่วันที่</label>
+      <input type="date" id="f-date-from">
+    </div>
+    <div class="field">
+      <label>ถึงวันที่</label>
+      <input type="date" id="f-date-to">
+    </div>
+    <div class="field">
+      <label>ธนาคาร</label>
+      <select id="f-bank">
+        <option value="">ทั้งหมด</option>
+        {% for b in rows|map(attribute='bank')|select|unique|sort %}
+        <option value="{{ b }}">{{ b }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="field">
+      <label>สถานะ</label>
+      <select id="f-status">
+        <option value="">ทั้งหมด</option>
+        <option value="verified">ยืนยันธนาคารแล้ว</option>
+        <option value="unverified">ยังไม่ยืนยัน</option>
+        <option value="dup">รายการซ้ำ</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>ผู้โอน/ผู้รับ</label>
+      <input type="text" id="f-name" placeholder="ค้นหาชื่อ...">
+    </div>
+    <div class="actions-row">
+      <button type="button" class="btn-apply" onclick="applyFilters()">filter</button>
+      <button type="button" class="btn-clear" onclick="clearFilters()">ล้าง</button>
+      <button type="button" class="btn-export" onclick="exportExcel()">Export Excel</button>
+    </div>
+  </div>
   <div class="table-wrap">
   {% if rows %}
   <table>
     <thead>
     <tr><th>รูป</th><th>วันที่</th><th>เวลา</th><th>ประเภท</th><th>ยอด</th><th>ธนาคาร</th><th>ผู้โอน</th><th>ผู้รับ</th><th>รายละเอียด</th><th>เลขอ้างอิง (QR)</th><th>model</th><th>ยืนยันธนาคาร</th>{% if role == 'admin' %}<th>จัดการ</th>{% endif %}</tr>
     </thead>
-    <tbody>
+    <tbody id="txn-tbody">
     {% for r in rows %}
-    <tr class="{{ dup_color.get(r.id, '') }}">
+    <tr class="{{ dup_color.get(r.id, '') }}"
+        data-direction="{{ r.direction }}" data-date="{{ r.txn_date }}" data-bank="{{ r.bank or '' }}"
+        data-verified="{{ '1' if r.verified_bank else '0' }}" data-dup="{{ '1' if dup_color.get(r.id) else '0' }}"
+        data-name="{{ (r.sender_name or '') ~ ' ' ~ (r.receiver_name or '') }}">
       <td>{% if r.raw_file_id %}<a href="/files/{{ r.raw_file_id }}" target="_blank"><img class="thumb" src="/files/{{ r.raw_file_id }}"></a>{% else %}-{% endif %}</td>
       <td>{{ r.txn_date }}</td>
       <td>{{ r.txn_time }}</td>
@@ -182,6 +288,109 @@
   <div class="empty">ยังไม่มีรายการ</div>
   {% endif %}
   </div>
+  <div class="pagination" id="pagination">
+    <div class="pagesize">
+      <label for="f-pagesize">แสดงต่อหน้า</label>
+      <select id="f-pagesize" onchange="renderTable()">
+        <option value="10">10</option>
+        <option value="20" selected>20</option>
+        <option value="30">30</option>
+        <option value="40">40</option>
+        <option value="50">50</option>
+        <option value="100">100</option>
+        <option value="all">ทั้งหมด</option>
+      </select>
+    </div>
+    <div class="nav">
+      <button type="button" onclick="gotoPage(currentPage - 1)">&laquo; ก่อนหน้า</button>
+      <span id="page-info"></span>
+      <button type="button" onclick="gotoPage(currentPage + 1)">ถัดไป &raquo;</button>
+    </div>
+  </div>
 </main>
+<script>
+let currentPage = 0;
+
+function rowMatchesFilters(row) {
+  const direction = document.getElementById('f-direction').value;
+  const dateFrom = document.getElementById('f-date-from').value;
+  const dateTo = document.getElementById('f-date-to').value;
+  const bank = document.getElementById('f-bank').value;
+  const status = document.getElementById('f-status').value;
+  const name = document.getElementById('f-name').value.trim().toLowerCase();
+
+  if (direction && !direction.split(',').includes(row.dataset.direction)) return false;
+  if (dateFrom && row.dataset.date < dateFrom) return false;
+  if (dateTo && row.dataset.date > dateTo) return false;
+  if (bank && row.dataset.bank !== bank) return false;
+  if (status === 'verified' && row.dataset.verified !== '1') return false;
+  if (status === 'unverified' && row.dataset.verified !== '0') return false;
+  if (status === 'dup' && row.dataset.dup !== '1') return false;
+  if (name && !row.dataset.name.toLowerCase().includes(name)) return false;
+  return true;
+}
+
+function renderTable() {
+  const allRows = Array.from(document.querySelectorAll('#txn-tbody tr'));
+  const matched = [];
+  allRows.forEach(row => {
+    const ok = rowMatchesFilters(row);
+    row.classList.toggle('hidden-row', !ok);
+    if (ok) matched.push(row);
+  });
+
+  const pageSizeValue = document.getElementById('f-pagesize').value;
+  const pageSize = pageSizeValue === 'all' ? matched.length || 1 : parseInt(pageSizeValue, 10);
+  const totalPages = Math.max(1, Math.ceil(matched.length / pageSize));
+  if (currentPage >= totalPages) currentPage = totalPages - 1;
+  if (currentPage < 0) currentPage = 0;
+
+  matched.forEach((row, i) => {
+    const inPage = i >= currentPage * pageSize && i < (currentPage + 1) * pageSize;
+    row.classList.toggle('page-hidden', !inPage);
+  });
+
+  document.getElementById('page-info').textContent =
+    matched.length === 0 ? 'ไม่มีรายการ' : `หน้า ${currentPage + 1} / ${totalPages} (${matched.length} รายการ)`;
+  const pag = document.getElementById('pagination');
+  pag.querySelectorAll('button')[0].disabled = currentPage <= 0;
+  pag.querySelectorAll('button')[1].disabled = currentPage >= totalPages - 1;
+}
+
+function gotoPage(page) {
+  currentPage = page;
+  renderTable();
+}
+
+function applyFilters() {
+  currentPage = 0;
+  renderTable();
+}
+
+function clearFilters() {
+  document.getElementById('f-direction').value = '';
+  document.getElementById('f-date-from').value = '';
+  document.getElementById('f-date-to').value = '';
+  document.getElementById('f-bank').value = '';
+  document.getElementById('f-status').value = '';
+  document.getElementById('f-name').value = '';
+  currentPage = 0;
+  renderTable();
+}
+
+function exportExcel() {
+  const params = new URLSearchParams({
+    direction: document.getElementById('f-direction').value,
+    date_from: document.getElementById('f-date-from').value,
+    date_to: document.getElementById('f-date-to').value,
+    bank: document.getElementById('f-bank').value,
+    status: document.getElementById('f-status').value,
+    name: document.getElementById('f-name').value.trim(),
+  });
+  window.location.href = '/export/excel?' + params.toString();
+}
+
+renderTable();
+</script>
 </body>
 </html>
