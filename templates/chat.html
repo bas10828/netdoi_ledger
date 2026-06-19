@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>แชตย้อนหลัง</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: "Sarabun", sans-serif; background: #eef1f5; margin: 0; color: #1c2833; }
+  header {
+    background: linear-gradient(120deg, #1e2a38, #2c3e50 60%, #34495e);
+    color: white; padding: 18px 32px; display: flex; justify-content: space-between; align-items: center;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.15);
+  }
+  header h1 { font-size: 17px; margin: 0; font-weight: 600; }
+  header a { color: #cdd9e5; text-decoration: none; font-size: 13px; padding: 6px 12px; border-radius: 6px; transition: background .15s; }
+  header a:hover { color: white; background: rgba(255,255,255,0.1); }
+  main { padding: 28px 32px; max-width: 760px; margin: 0 auto; }
+  .home-btn {
+    display: inline-block; margin-bottom: 16px; padding: 6px 14px; font-size: 13px; color: #2c70c9;
+    text-decoration: none; border: 1.5px solid #cdd9e5; border-radius: 8px; background: white;
+    transition: background .15s;
+  }
+  .home-btn:hover { background: #eef1f3; }
+  .chat-wrap {
+    background: white; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.06);
+    padding: 20px; max-height: 75vh; overflow-y: auto;
+  }
+  .bubble { max-width: 75%; margin-bottom: 12px; }
+  .bubble .meta { font-size: 11px; color: #97a3ad; margin-bottom: 3px; }
+  .bubble .text {
+    background: #f0f2f5; padding: 9px 13px; border-radius: 12px; font-size: 14px;
+    line-height: 1.5; white-space: pre-wrap; word-break: break-word;
+  }
+  .bubble .photo img {
+    max-width: 220px; border-radius: 12px; display: block; box-shadow: 0 1px 6px rgba(0,0,0,0.15);
+  }
+  .bubble .file-link {
+    display: inline-block; background: #eef1f3; padding: 9px 13px; border-radius: 12px;
+    font-size: 13px; color: #2c70c9; text-decoration: none;
+  }
+  .bubble .file-link:hover { text-decoration: underline; }
+  .empty { padding: 50px; text-align: center; color: #aab2ba; font-size: 14px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>แชตย้อนหลัง</h1>
+  <a href="/logout">ออกจากระบบ</a>
+</header>
+<main>
+  <a class="home-btn" href="/">&larr; หน้าแรก</a>
+  <div class="chat-wrap">
+    {% if messages %}
+      {% for m in messages %}
+      <div class="bubble">
+        <div class="meta">{{ names.get(m.line_user_id) or (m.line_user_id[-6:] if m.line_user_id else "ไม่ทราบผู้ส่ง") }} · {{ m.received_at.strftime("%d/%m/%Y %H:%M") }}</div>
+        {% if m.kind == 'text' %}
+        <div class="text">{{ m.text }}</div>
+        {% elif m.kind == 'image' %}
+        <div class="photo"><a href="/files/{{ m.raw_file_id }}" target="_blank"><img src="/files/{{ m.raw_file_id }}"></a></div>
+        {% else %}
+        <a class="file-link" href="/files/{{ m.raw_file_id }}" target="_blank">ไฟล์แนบ — ดูไฟล์</a>
+        {% endif %}
+      </div>
+      {% endfor %}
+    {% else %}
+    <div class="empty">ยังไม่มีข้อความ</div>
+    {% endif %}
+  </div>
+</main>
+</body>
+</html>

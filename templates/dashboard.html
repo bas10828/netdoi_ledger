@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>บัญชีรายรับ-รายจ่าย</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: "Sarabun", sans-serif; background: #eef1f5; margin: 0; color: #1c2833; }
+  header {
+    background: linear-gradient(120deg, #1e2a38, #2c3e50 60%, #34495e);
+    color: white; padding: 18px 32px; display: flex; justify-content: space-between; align-items: center;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.15);
+  }
+  header .title { display: flex; align-items: center; gap: 10px; }
+  header .badge-icon {
+    width: 30px; height: 30px; border-radius: 8px; background: rgba(255,255,255,0.15);
+    display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 14px;
+  }
+  header h1 { font-size: 17px; margin: 0; font-weight: 600; }
+  header .role-pill {
+    font-size: 11px; padding: 2px 10px; border-radius: 10px; margin-left: 8px;
+    background: rgba(255,255,255,0.15); color: #cdd9e5; vertical-align: middle;
+  }
+  header a { color: #cdd9e5; text-decoration: none; font-size: 13px; padding: 6px 12px; border-radius: 6px; transition: background .15s; }
+  header a:hover { color: white; background: rgba(255,255,255,0.1); }
+  main { padding: 28px 32px; max-width: 1320px; margin: 0 auto; }
+  .cards { display: grid; grid-template-columns: repeat(5, 1fr); gap: 16px; margin-bottom: 24px; }
+  .card {
+    background: white; border-radius: 12px; padding: 18px 20px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.06); border-left: 4px solid #d6dbe1;
+    transition: transform .15s, box-shadow .15s;
+  }
+  .card:hover { transform: translateY(-2px); box-shadow: 0 6px 18px rgba(0,0,0,0.1); }
+  .card.c-expense { border-left-color: #c0392b; }
+  .card.c-income { border-left-color: #1e8449; }
+  .card.c-net { border-left-color: #2c70c9; }
+  .card.c-count { border-left-color: #97a3ad; }
+  .card.c-ai { border-left-color: #5a4fcf; }
+  .card.c-ai.low { border-left-color: #c0392b; background: #fff5f5; }
+  .card .label { font-size: 12px; color: #888; margin-bottom: 6px; font-weight: 500; }
+  .card .value { font-size: 25px; font-weight: 700; }
+  .card .ai-value { color: #5a4fcf; }
+  .card.c-ai.low .ai-value { color: #c0392b; }
+  .ai-edit { display: flex; gap: 6px; margin-top: 10px; }
+  .ai-edit input {
+    flex: 1; width: 0; padding: 5px 8px; font-size: 12px; border: 1.5px solid #e1e5e9;
+    border-radius: 6px; font-family: inherit;
+  }
+  .ai-edit button {
+    padding: 5px 10px; font-size: 12px; font-weight: 600; border: none; border-radius: 6px;
+    background: #5a4fcf; color: white; cursor: pointer;
+  }
+  .ai-edit button:hover { background: #4a40b3; }
+  .expense { color: #c0392b; }
+  .income { color: #1e8449; }
+  .net { color: #2c70c9; }
+  .table-wrap { background: white; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.06); overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { padding: 11px 14px; text-align: left; font-size: 13px; border-bottom: 1px solid #f0f2f5; white-space: nowrap; }
+  th { background: #f7f8fa; color: #6b7785; font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: .03em; position: sticky; top: 0; }
+  tbody tr { transition: background .1s; }
+  tbody tr:hover { background: #f7f9fb; }
+  tr:last-child td { border-bottom: none; }
+  .dir-expense { color: #c0392b; font-weight: 600; }
+  .dir-income { color: #1e8449; font-weight: 600; }
+  .dir-unknown { color: #b8860b; font-weight: 600; }
+  .badge { font-size: 11px; padding: 3px 9px; border-radius: 10px; background: #eef1f3; color: #888; }
+  .badge.ok { background: #eafaf1; color: #1e8449; }
+  .empty { padding: 50px; text-align: center; color: #aab2ba; font-size: 14px; }
+  .thumb { height: 38px; border-radius: 6px; display: block; box-shadow: 0 1px 4px rgba(0,0,0,0.15); transition: transform .15s; }
+  .thumb:hover { transform: scale(1.08); }
+  .edit-link { color: #2c70c9; text-decoration: none; font-size: 12px; font-weight: 600; }
+  .edit-link:hover { text-decoration: underline; }
+  .del-link { color: #c0392b; background: none; border: none; font-size: 12px; font-weight: 600; cursor: pointer; padding: 0; font-family: inherit; text-decoration: none; }
+  .del-link:hover { text-decoration: underline; }
+  .actions { display: flex; gap: 10px; align-items: center; }
+  .add-btn {
+    display: inline-flex; align-items: center; gap: 6px; margin-bottom: 18px; padding: 9px 18px;
+    background: #2c70c9; color: white; border-radius: 8px; font-size: 13px; font-weight: 600;
+    text-decoration: none; box-shadow: 0 2px 8px rgba(44,112,201,0.3); transition: background .15s;
+  }
+  .add-btn:hover { background: #235ba3; }
+  .add-btn.chat-btn { background: #5a4fcf; box-shadow: 0 2px 8px rgba(90,79,207,0.3); margin-left: 8px; }
+  .add-btn.chat-btn:hover { background: #4a40b3; }
+  .dir-select {
+    padding: 5px 8px; border-radius: 6px; font-size: 12px; font-weight: 600; font-family: inherit;
+    border: 1.5px solid #e1e5e9; cursor: pointer; background: white;
+  }
+  .dir-select.dir-expense { color: #c0392b; border-color: #f3c4bd; }
+  .dir-select.dir-income { color: #1e8449; border-color: #bfe3cd; }
+  .dir-select.dir-unknown { color: #b8860b; border-color: #f0dca3; }
+  .ref { font-size: 11px; color: #888; font-family: monospace; }
+  .dup-badge { font-size: 11px; padding: 2px 8px; border-radius: 10px; background: #ffe6e6; color: #c0392b; margin-left: 4px; font-weight: 600; }
+  tr.dup-1 { background: #fff3e0; }
+  tr.dup-2 { background: #e3f2fd; }
+  tr.dup-3 { background: #f3e5f5; }
+  tr.dup-4 { background: #e8f5e9; }
+  tr.dup-5 { background: #fffde7; }
+  tr.dup-1:hover, tr.dup-2:hover, tr.dup-3:hover, tr.dup-4:hover, tr.dup-5:hover { filter: brightness(0.97); }
+</style>
+</head>
+<body>
+<header>
+  <div class="title">
+    <div class="badge-icon">฿</div>
+    <h1>บัญชีรายรับ-รายจ่าย<span class="role-pill">{{ user }} · {{ "ผู้ดูแล" if role == "admin" else "ผู้เยี่ยมชม" }}</span></h1>
+  </div>
+  <a href="/logout">ออกจากระบบ</a>
+</header>
+<main>
+  <div class="cards">
+    <div class="card c-expense"><div class="label">รายจ่าย</div><div class="value expense">{{ "%.2f"|format(expense) }}</div></div>
+    <div class="card c-income"><div class="label">รายรับ</div><div class="value income">{{ "%.2f"|format(income) }}</div></div>
+    <div class="card c-net"><div class="label">สุทธิ</div><div class="value net">{{ "%.2f"|format(net) }}</div></div>
+    <div class="card c-count"><div class="label">จำนวนรายการ</div><div class="value">{{ count }}</div></div>
+    <div class="card c-ai {{ 'low' if ai_balance <= 1 else '' }}">
+      <div class="label">AI credit คงเหลือ (USD)</div>
+      <div class="value ai-value">${{ "%.2f"|format(ai_balance) }}</div>
+      {% if role == 'admin' %}
+      <form class="ai-edit" method="post" action="/settings/ai-balance">
+        <input type="number" step="0.01" name="value" value="{{ "%.2f"|format(ai_starting_balance) }}" title="ยอดเงิน top-up ตั้งต้น">
+        <button type="submit">บันทึก</button>
+      </form>
+      {% endif %}
+    </div>
+  </div>
+  {% if role == 'admin' %}
+  <a class="add-btn" href="/transactions/new">+ เพิ่มรายการใหม่</a>
+  <a class="add-btn chat-btn" href="/chat">ดูแชตย้อนหลัง</a>
+  {% endif %}
+  <div class="table-wrap">
+  {% if rows %}
+  <table>
+    <thead>
+    <tr><th>รูป</th><th>วันที่</th><th>เวลา</th><th>ประเภท</th><th>ยอด</th><th>ธนาคาร</th><th>ผู้โอน</th><th>ผู้รับ</th><th>รายละเอียด</th><th>เลขอ้างอิง (QR)</th><th>model</th><th>ยืนยันธนาคาร</th>{% if role == 'admin' %}<th>จัดการ</th>{% endif %}</tr>
+    </thead>
+    <tbody>
+    {% for r in rows %}
+    <tr class="{{ dup_color.get(r.id, '') }}">
+      <td>{% if r.raw_file_id %}<a href="/files/{{ r.raw_file_id }}" target="_blank"><img class="thumb" src="/files/{{ r.raw_file_id }}"></a>{% else %}-{% endif %}</td>
+      <td>{{ r.txn_date }}</td>
+      <td>{{ r.txn_time }}</td>
+      <td>
+        {% if role == 'admin' %}
+        <form method="post" action="/transactions/{{ r.id }}/direction">
+          <select name="direction" class="dir-select dir-{{ r.direction }}" onchange="this.form.submit()">
+            <option value="expense" {% if r.direction == 'expense' %}selected{% endif %}>รายจ่าย</option>
+            <option value="income" {% if r.direction == 'income' %}selected{% endif %}>รายรับ</option>
+            <option value="unknown" {% if r.direction == 'unknown' %}selected{% endif %}>ไม่ทราบ</option>
+          </select>
+        </form>
+        {% else %}
+        <span class="dir-{{ r.direction }}">{{ {"expense":"รายจ่าย","income":"รายรับ","unknown":"ไม่ทราบ"}[r.direction] }}</span>
+        {% endif %}
+      </td>
+      <td>{{ "%.2f"|format(r.amount) }}</td>
+      <td>{{ r.bank or "-" }}</td>
+      <td>{{ r.sender_name or "-" }}</td>
+      <td>{{ r.receiver_name or "-" }}</td>
+      <td>{{ r.memo or "-" }}</td>
+      <td><span class="ref">{{ r.qr_trans_ref or r.printed_ref or "-" }}</span>{% if dup_color.get(r.id) %}<span class="dup-badge">ซ้ำ</span>{% endif %}</td>
+      <td>{{ r.ai_model }}</td>
+      <td>{% if r.verified_bank %}<span class="badge ok">✓</span>{% else %}<span class="badge">—</span>{% endif %}</td>
+      {% if role == 'admin' %}
+      <td>
+        <div class="actions">
+          <a class="edit-link" href="/transactions/{{ r.id }}/edit">แก้ไข</a>
+          <form method="post" action="/transactions/{{ r.id }}/delete" onsubmit="return confirm('ลบรายการนี้?');">
+            <button type="submit" class="del-link">ลบ</button>
+          </form>
+        </div>
+      </td>
+      {% endif %}
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="empty">ยังไม่มีรายการ</div>
+  {% endif %}
+  </div>
+</main>
+</body>
+</html>

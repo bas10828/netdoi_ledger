@@ -1,0 +1,13 @@
+.env
+ledger.csv
+ledger_*.csv
+__pycache__/
+*.pyc
+slip/
+line_files/
+webhook.log
+report.html
+price_comparison.pdf
+seed_user.sql
+update_roles.sql
+add_*.sql

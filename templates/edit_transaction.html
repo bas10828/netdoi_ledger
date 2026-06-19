@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>แก้ไขรายการ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: "Sarabun", sans-serif; background: #eef1f5; margin: 0; color: #1c2833; }
+  header {
+    background: linear-gradient(120deg, #1e2a38, #2c3e50 60%, #34495e);
+    color: white; padding: 18px 32px; display: flex; justify-content: space-between; align-items: center;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.15);
+  }
+  header h1 { font-size: 17px; margin: 0; font-weight: 600; }
+  header a { color: #cdd9e5; text-decoration: none; font-size: 13px; padding: 6px 12px; border-radius: 6px; transition: background .15s; }
+  header a:hover { color: white; background: rgba(255,255,255,0.1); }
+  main { padding: 28px 32px; max-width: 1040px; margin: 0 auto; display: flex; gap: 24px; align-items: flex-start; }
+  .preview { flex: 1; background: white; border-radius: 12px; padding: 18px; box-shadow: 0 2px 10px rgba(0,0,0,0.06); position: sticky; top: 28px; }
+  .preview img { width: 100%; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+  .preview .no-img { padding: 40px 10px; text-align: center; color: #aab2ba; font-size: 13px; background: #f7f8fa; border-radius: 8px; }
+  .form-wrap { flex: 1; background: white; border-radius: 12px; padding: 22px; box-shadow: 0 2px 10px rgba(0,0,0,0.06); }
+  label { display: block; font-size: 12px; color: #666; margin: 12px 0 4px; font-weight: 500; }
+  input, select {
+    width: 100%; padding: 9px 11px; border: 1.5px solid #e1e5e9; border-radius: 8px;
+    font-size: 14px; font-family: inherit; transition: border-color .15s;
+  }
+  input:focus, select:focus { outline: none; border-color: #2c70c9; }
+  .row { display: flex; gap: 12px; }
+  .row > div { flex: 1; }
+  .btn-row { display: flex; gap: 10px; margin-top: 22px; }
+  .btn-row button, .btn-row a {
+    flex: 1; padding: 11px; border: none; border-radius: 8px; font-size: 14px; font-weight: 600;
+    cursor: pointer; text-align: center; text-decoration: none; transition: background .15s;
+  }
+  .btn-save { background: #2c70c9; color: white; box-shadow: 0 2px 8px rgba(44,112,201,0.3); }
+  .btn-save:hover { background: #235ba3; }
+  .btn-cancel { background: #eef1f3; color: #555; }
+  .btn-cancel:hover { background: #dde2e6; }
+  .home-btn {
+    display: inline-block; margin-bottom: 16px; padding: 6px 14px; font-size: 13px; color: #2c70c9;
+    text-decoration: none; border: 1.5px solid #cdd9e5; border-radius: 8px; transition: background .15s;
+  }
+  .home-btn:hover { background: #eef1f3; }
+</style>
+</head>
+<body>
+<header>
+  <h1>{% if txn.id %}แก้ไขรายการ #{{ txn.id }}{% else %}เพิ่มรายการใหม่{% endif %}</h1>
+  <a href="/logout">ออกจากระบบ</a>
+</header>
+<main>
+  <div class="preview">
+    <a class="home-btn" href="/">&larr; หน้าแรก</a>
+    {% if txn.raw_file_id %}
+    <img src="/files/{{ txn.raw_file_id }}" alt="สลิป">
+    {% else %}
+    <div class="no-img">ไม่มีรูปอ้างอิง<br>(รายการกรอกมือ)</div>
+    {% endif %}
+  </div>
+  <div class="form-wrap">
+    <form method="post" action="{{ form_action }}">
+      <label>ธนาคาร</label>
+      <input name="bank" value="{{ txn.bank or '' }}">
+
+      <div class="row">
+        <div>
+          <label>วันที่</label>
+          <input type="date" name="txn_date" value="{{ txn.txn_date }}" required>
+        </div>
+        <div>
+          <label>เวลา</label>
+          <input type="time" name="txn_time" value="{{ txn.txn_time }}" required>
+        </div>
+      </div>
+
+      <div class="row">
+        <div>
+          <label>ยอดเงิน</label>
+          <input type="number" step="0.01" name="amount" value="{{ txn.amount }}" required>
+        </div>
+        <div>
+          <label>ค่าธรรมเนียม</label>
+          <input type="number" step="0.01" name="fee" value="{{ txn.fee or 0 }}">
+        </div>
+      </div>
+
+      <label>ประเภท</label>
+      <select name="direction">
+        <option value="expense" {% if txn.direction != 'income' %}selected{% endif %}>รายจ่าย</option>
+        <option value="income" {% if txn.direction == 'income' %}selected{% endif %}>รายรับ</option>
+        <option value="unknown">ไม่ทราบ</option>
+      </select>
+
+      <label>ผู้โอน</label>
+      <input name="sender_name" value="{{ txn.sender_name or '' }}">
+      <label>เลขบัญชีผู้โอน</label>
+      <input name="sender_account" value="{{ txn.sender_account or '' }}">
+
+      <label>ผู้รับ</label>
+      <input name="receiver_name" value="{{ txn.receiver_name or '' }}">
+      <label>เลขบัญชีผู้รับ</label>
+      <input name="receiver_account" value="{{ txn.receiver_account or '' }}">
+
+      <label>รายละเอียด</label>
+      <input name="memo" value="{{ txn.memo or '' }}">
+
+      <label>สถานะ</label>
+      <select name="status">
+        <option value="pending_review" {% if txn.status == 'pending_review' %}selected{% endif %}>ยังไม่ตรวจ</option>
+        <option value="reviewed" {% if txn.status == 'reviewed' %}selected{% endif %}>ตรวจแล้ว</option>
+      </select>
+
+      <div class="btn-row">
+        <a class="btn-cancel" href="/">ยกเลิก</a>
+        <button type="submit" class="btn-save">{% if txn.id %}บันทึก{% else %}เพิ่มรายการ{% endif %}</button>
+      </div>
+    </form>
+  </div>
+</main>
+</body>
+</html>
