@@ -8,6 +8,8 @@ line_files/
 webhook.log
 report.html
 price_comparison.pdf
+ledger_report.xlsx
+ledger_report.pdf
 seed_user.sql
 update_roles.sql
 add_*.sql
