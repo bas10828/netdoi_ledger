@@ -295,16 +295,22 @@ def build_export_filter(direction, date_from, date_to, bank, status, name, categ
     return where, params
 
 
-def fetch_export_df(direction, date_from, date_to, bank, status, name, category):
+def fetch_export_df(direction, date_from, date_to, bank, status, name, category, columns="full"):
     where, params = build_export_filter(direction, date_from, date_to, bank, status, name, category)
-    query = """
-        SELECT
+    if columns == "print":
+        select = """
+            txn_date AS "วันที่", txn_time AS "เวลา", bank AS "ธนาคาร",
+            direction AS "ประเภท", category AS "หมวด", amount AS "ยอดเงิน",
+            receiver_name AS "ผู้รับ", memo AS "รายละเอียด"
+        """
+    else:
+        select = """
             txn_date AS "วันที่", txn_time AS "เวลา", bank AS "ธนาคาร",
             direction AS "ประเภท", category AS "หมวด", amount AS "ยอดเงิน", fee AS "ค่าธรรมเนียม",
             sender_name AS "ผู้โอน", receiver_name AS "ผู้รับ", memo AS "รายละเอียด",
             qr_trans_ref AS "เลขอ้างอิง (QR)", verified_bank AS "ยืนยันธนาคาร"
-        FROM slip_transactions
-    """
+        """
+    query = f"SELECT {select} FROM slip_transactions"
     if where:
         query += " WHERE " + " AND ".join(where)
     query += " ORDER BY txn_date, txn_time"
@@ -375,7 +381,7 @@ def export_pdf(
     except RuntimeError as e:
         raise HTTPException(500, str(e))
 
-    df = fetch_export_df(direction, date_from, date_to, bank, status, name, category)
+    df = fetch_export_df(direction, date_from, date_to, bank, status, name, category, columns="print")
 
     buf = io.BytesIO()
     build_pdf(df, buf)
