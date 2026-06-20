@@ -87,6 +87,17 @@
   .add-btn:hover { background: #235ba3; }
   .add-btn.chat-btn { background: #5a4fcf; box-shadow: 0 2px 8px rgba(90,79,207,0.3); margin-left: 8px; }
   .add-btn.chat-btn:hover { background: #4a40b3; }
+  .add-btn.audit-btn { background: #6b7785; box-shadow: 0 2px 8px rgba(107,119,133,0.3); margin-left: 8px; }
+  .add-btn.audit-btn:hover { background: #57626e; }
+  .add-btn.report-btn { background: #1e8449; box-shadow: 0 2px 8px rgba(30,132,73,0.3); margin-right: 8px; }
+  .add-btn.report-btn:hover { background: #186a3a; }
+  .add-btn.dup-toggle-btn {
+    background: #e8a33d; box-shadow: 0 2px 8px rgba(232,163,61,0.3); margin-right: 8px;
+    border: none; font-family: inherit;
+  }
+  .add-btn.dup-toggle-btn:hover { background: #d4922e; }
+  .add-btn.dup-toggle-btn.active { background: #c0392b; box-shadow: 0 2px 8px rgba(192,57,43,0.3); }
+  .add-btn.dup-toggle-btn.active:hover { background: #a93226; }
   .dir-select {
     padding: 5px 8px; border-radius: 6px; font-size: 12px; font-weight: 600; font-family: inherit;
     border: 1.5px solid #e1e5e9; cursor: pointer; background: white;
@@ -149,6 +160,8 @@
     .filter-bar .actions-row button { flex: 1; }
     th, td { padding: 9px 10px; font-size: 12px; }
     .add-btn.chat-btn { margin-left: 0; }
+    .add-btn.report-btn { margin-right: 0; }
+    .add-btn.dup-toggle-btn { margin-right: 0; }
     .pagination { flex-direction: column; align-items: stretch; gap: 10px; }
     .pagination .pagesize { justify-content: space-between; }
     .pagination .nav { justify-content: center; }
@@ -183,9 +196,14 @@
       {% endif %}
     </div>
   </div>
+  <a class="add-btn report-btn" href="/reports">รายงานรายเดือน</a>
+  {% if dup_color %}
+  <button type="button" id="dup-toggle-btn" class="add-btn dup-toggle-btn" onclick="toggleDupOnly()">ดูเฉพาะรายการซ้ำ</button>
+  {% endif %}
   {% if role == 'admin' %}
   <a class="add-btn" href="/transactions/new">+ เพิ่มรายการใหม่</a>
   <a class="add-btn chat-btn" href="/chat">ดูแชตย้อนหลัง</a>
+  <a class="add-btn audit-btn" href="/audit">ประวัติการแก้ไข</a>
   {% endif %}
   <div class="filter-bar">
     <div class="field">
@@ -228,6 +246,15 @@
       <label>ผู้โอน/ผู้รับ</label>
       <input type="text" id="f-name" placeholder="ค้นหาชื่อ...">
     </div>
+    <div class="field">
+      <label>หมวด</label>
+      <select id="f-category">
+        <option value="">ทั้งหมด</option>
+        {% for c in categories %}
+        <option value="{{ c }}">{{ c }}</option>
+        {% endfor %}
+      </select>
+    </div>
     <div class="actions-row">
       <button type="button" class="btn-apply" onclick="applyFilters()">filter</button>
       <button type="button" class="btn-clear" onclick="clearFilters()">ล้าง</button>
@@ -238,13 +265,14 @@
   {% if rows %}
   <table>
     <thead>
-    <tr><th>รูป</th><th>วันที่</th><th>เวลา</th><th>ประเภท</th><th>ยอด</th><th>ธนาคาร</th><th>ผู้โอน</th><th>ผู้รับ</th><th>รายละเอียด</th><th>เลขอ้างอิง (QR)</th><th>model</th><th>ยืนยันธนาคาร</th>{% if role == 'admin' %}<th>จัดการ</th>{% endif %}</tr>
+    <tr><th>รูป</th><th>วันที่</th><th>เวลา</th><th>ประเภท</th><th>ยอด</th><th>ธนาคาร</th><th>ผู้โอน</th><th>ผู้รับ</th><th>รายละเอียด</th><th>หมวด</th><th>เลขอ้างอิง (QR)</th><th>model</th><th>ยืนยันธนาคาร</th>{% if role == 'admin' %}<th>จัดการ</th>{% endif %}</tr>
     </thead>
     <tbody id="txn-tbody">
     {% for r in rows %}
     <tr class="{{ dup_color.get(r.id, '') }}"
         data-direction="{{ r.direction }}" data-date="{{ r.txn_date }}" data-bank="{{ r.bank or '' }}"
         data-verified="{{ '1' if r.verified_bank else '0' }}" data-dup="{{ '1' if dup_color.get(r.id) else '0' }}"
+        data-category="{{ r.category or '' }}"
         data-name="{{ (r.sender_name or '') ~ ' ' ~ (r.receiver_name or '') }}">
       <td>{% if r.raw_file_id %}<a href="/files/{{ r.raw_file_id }}" target="_blank"><img class="thumb" src="/files/{{ r.raw_file_id }}"></a>{% else %}-{% endif %}</td>
       <td>{{ r.txn_date }}</td>
@@ -267,6 +295,20 @@
       <td>{{ r.sender_name or "-" }}</td>
       <td>{{ r.receiver_name or "-" }}</td>
       <td>{{ r.memo or "-" }}</td>
+      <td>
+        {% if role == 'admin' %}
+        <form method="post" action="/transactions/{{ r.id }}/category">
+          <select name="category" class="dir-select" onchange="this.form.submit()">
+            <option value="" {% if not r.category %}selected{% endif %}>-- ไม่ระบุ --</option>
+            {% for c in categories %}
+            <option value="{{ c }}" {% if r.category == c %}selected{% endif %}>{{ c }}</option>
+            {% endfor %}
+          </select>
+        </form>
+        {% else %}
+        {{ r.category or "-" }}
+        {% endif %}
+      </td>
       <td><span class="ref">{{ r.qr_trans_ref or r.printed_ref or "-" }}</span>{% if dup_color.get(r.id) %}<span class="dup-badge">ซ้ำ</span>{% endif %}</td>
       <td>{{ r.ai_model }}</td>
       <td>{% if r.verified_bank %}<span class="badge ok">✓</span>{% else %}<span class="badge">—</span>{% endif %}</td>
@@ -310,14 +352,26 @@
 </main>
 <script>
 let currentPage = 0;
+let dupOnlyMode = false;
+
+function toggleDupOnly() {
+  dupOnlyMode = !dupOnlyMode;
+  const btn = document.getElementById('dup-toggle-btn');
+  btn.textContent = dupOnlyMode ? 'ดูข้อมูลปกติ' : 'ดูเฉพาะรายการซ้ำ';
+  btn.classList.toggle('active', dupOnlyMode);
+  currentPage = 0;
+  renderTable();
+}
 
 function rowMatchesFilters(row) {
+  if (dupOnlyMode && row.dataset.dup !== '1') return false;
   const direction = document.getElementById('f-direction').value;
   const dateFrom = document.getElementById('f-date-from').value;
   const dateTo = document.getElementById('f-date-to').value;
   const bank = document.getElementById('f-bank').value;
   const status = document.getElementById('f-status').value;
   const name = document.getElementById('f-name').value.trim().toLowerCase();
+  const category = document.getElementById('f-category').value;
 
   if (direction && !direction.split(',').includes(row.dataset.direction)) return false;
   if (dateFrom && row.dataset.date < dateFrom) return false;
@@ -326,6 +380,7 @@ function rowMatchesFilters(row) {
   if (status === 'verified' && row.dataset.verified !== '1') return false;
   if (status === 'unverified' && row.dataset.verified !== '0') return false;
   if (status === 'dup' && row.dataset.dup !== '1') return false;
+  if (category && row.dataset.category !== category) return false;
   if (name && !row.dataset.name.toLowerCase().includes(name)) return false;
   return true;
 }
@@ -374,6 +429,7 @@ function clearFilters() {
   document.getElementById('f-bank').value = '';
   document.getElementById('f-status').value = '';
   document.getElementById('f-name').value = '';
+  document.getElementById('f-category').value = '';
   currentPage = 0;
   renderTable();
 }
@@ -386,11 +442,29 @@ function exportExcel() {
     bank: document.getElementById('f-bank').value,
     status: document.getElementById('f-status').value,
     name: document.getElementById('f-name').value.trim(),
+    category: document.getElementById('f-category').value,
   });
   window.location.href = '/export/excel?' + params.toString();
 }
 
 renderTable();
+
+const monthlyData = {{ monthly_chart|safe }};
+new Chart(document.getElementById('monthly-chart'), {
+  type: 'bar',
+  data: {
+    labels: monthlyData.labels,
+    datasets: [
+      { label: 'รายรับ', data: monthlyData.income, backgroundColor: '#1e8449' },
+      { label: 'รายจ่าย', data: monthlyData.expense, backgroundColor: '#c0392b' },
+    ],
+  },
+  options: {
+    responsive: true,
+    plugins: { legend: { position: 'top' } },
+    scales: { y: { beginAtZero: true } },
+  },
+});
 </script>
 </body>
 </html>

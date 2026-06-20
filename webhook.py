@@ -17,6 +17,8 @@ from pathlib import Path
 import anthropic
 import psycopg2
 from dotenv import load_dotenv
+
+from categorize import guess_category
 from fastapi import FastAPI, Header, HTTPException, Request
 from linebot.v3.exceptions import InvalidSignatureError
 from linebot.v3.messaging import ApiClient, Configuration, MessagingApiBlob
@@ -137,10 +139,11 @@ def extract_and_store(path: Path, raw_file_id: int):
             cur.execute(
                 """INSERT INTO slip_transactions
                    (raw_file_id, bank, txn_date, txn_time, amount, fee, sender_name, sender_account,
-                    receiver_name, receiver_account, memo, printed_ref, qr_trans_ref, direction, ai_model)
-                   VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
+                    receiver_name, receiver_account, memo, printed_ref, qr_trans_ref, direction, category, ai_model)
+                   VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
                 (raw_file_id, s.bank, s.date, s.time, s.amount, s.fee, s.sender_name, s.sender_account,
-                 s.receiver_name, s.receiver_account, s.memo, s.printed_ref, ref_qr, dirn, MODEL),
+                 s.receiver_name, s.receiver_account, s.memo, s.printed_ref, ref_qr, dirn,
+                 guess_category(s.memo), MODEL),
             )
             cur.execute("UPDATE raw_files SET processed = true WHERE id = %s", (raw_file_id,))
             cur.execute(

@@ -36,6 +36,7 @@ CREATE TABLE slip_transactions (
     printed_ref       text,
     qr_trans_ref      text,
     direction         text CHECK (direction IN ('expense', 'income', 'unknown')) NOT NULL DEFAULT 'unknown',
+    category          text,
     ai_model          text NOT NULL,
     verified_bank     boolean NOT NULL DEFAULT false,
     raw_ai_response   jsonb,
@@ -46,6 +47,7 @@ CREATE TABLE slip_transactions (
 CREATE INDEX idx_slip_transactions_raw_file_id ON slip_transactions (raw_file_id);
 CREATE INDEX idx_slip_transactions_txn_date ON slip_transactions (txn_date);
 CREATE INDEX idx_slip_transactions_qr_trans_ref ON slip_transactions (qr_trans_ref);
+CREATE INDEX idx_slip_transactions_category ON slip_transactions (category);
 
 CREATE TABLE dashboard_users (
     id            serial PRIMARY KEY,
@@ -83,3 +85,16 @@ CREATE TABLE app_settings (
 );
 
 INSERT INTO app_settings (key, value) VALUES ('ai_starting_balance_usd', '4.78');
+
+CREATE TABLE audit_log (
+    id           serial PRIMARY KEY,
+    txn_id       integer,
+    action       text NOT NULL CHECK (action IN ('create', 'update', 'delete')),
+    changed_by   text NOT NULL,
+    changed_at   timestamptz NOT NULL DEFAULT now(),
+    before_data  jsonb,
+    after_data   jsonb
+);
+
+CREATE INDEX idx_audit_log_txn_id ON audit_log (txn_id);
+CREATE INDEX idx_audit_log_changed_at ON audit_log (changed_at);

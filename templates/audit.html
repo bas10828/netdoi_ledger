@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ประวัติการแก้ไข</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: "Sarabun", sans-serif; background: #eef1f5; margin: 0; color: #1c2833; }
+  header {
+    background: linear-gradient(120deg, #1e2a38, #2c3e50 60%, #34495e);
+    color: white; padding: 18px 32px; display: flex; justify-content: space-between; align-items: center;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.15);
+  }
+  header .title { display: flex; align-items: center; gap: 10px; }
+  header .badge-icon {
+    width: 30px; height: 30px; border-radius: 8px; background: rgba(255,255,255,0.15);
+    display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 14px;
+  }
+  header h1 { font-size: 17px; margin: 0; font-weight: 600; }
+  header a { color: #cdd9e5; text-decoration: none; font-size: 13px; padding: 6px 12px; border-radius: 6px; transition: background .15s; }
+  header a:hover { color: white; background: rgba(255,255,255,0.1); }
+  main { padding: 28px 32px; max-width: 1320px; margin: 0 auto; }
+  .back-link { display: inline-flex; align-items: center; gap: 6px; margin-bottom: 18px; color: #2c70c9; text-decoration: none; font-size: 13px; font-weight: 600; }
+  .back-link:hover { text-decoration: underline; }
+  .table-wrap { background: white; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.06); overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { padding: 13px 14px; text-align: left; font-size: 13px; border-bottom: 1px solid #f0f2f5; }
+  th { background: #f7f8fa; color: #97a3ad; font-weight: 600; font-size: 11px; letter-spacing: .02em; }
+  tbody tr:nth-child(even) { background: #fafbfc; }
+  tr:last-child td { border-bottom: none; }
+  .action-create { color: #1e8449; font-weight: 600; }
+  .action-update { color: #2c70c9; font-weight: 600; }
+  .action-delete { color: #c0392b; font-weight: 600; }
+  .summary { font-size: 12px; color: #555; }
+  .empty { padding: 50px; text-align: center; color: #aab2ba; font-size: 14px; }
+  @media (max-width: 768px) {
+    header { padding: 14px 16px; }
+    main { padding: 16px; }
+    th, td { padding: 9px 10px; font-size: 12px; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="title">
+    <div class="badge-icon">฿</div>
+    <h1>ประวัติการแก้ไข</h1>
+  </div>
+  <a href="/logout">ออกจากระบบ</a>
+</header>
+<main>
+  <a class="back-link" href="/">&laquo; กลับหน้าหลัก</a>
+  <div class="table-wrap">
+  {% if entries %}
+  <table>
+    <thead>
+    <tr><th>เวลา</th><th>แก้โดย</th><th>การกระทำ</th><th>รายการ #</th><th>รายละเอียดที่เปลี่ยน</th></tr>
+    </thead>
+    <tbody>
+    {% for e in entries %}
+    <tr>
+      <td>{{ e.changed_at.strftime("%Y-%m-%d %H:%M:%S") }}</td>
+      <td>{{ e.changed_by }}</td>
+      <td><span class="action-{{ e.action }}">{{ e.action_label }}</span></td>
+      <td>{{ e.txn_id }}</td>
+      <td class="summary">{{ e.summary }}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="empty">ยังไม่มีประวัติการแก้ไข</div>
+  {% endif %}
+  </div>
+</main>
+</body>
+</html>

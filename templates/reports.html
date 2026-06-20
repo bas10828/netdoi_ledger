@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>รายงานรายเดือน</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: "Sarabun", sans-serif; background: #eef1f5; margin: 0; color: #1c2833; }
+  header {
+    background: linear-gradient(120deg, #1e2a38, #2c3e50 60%, #34495e);
+    color: white; padding: 18px 32px; display: flex; justify-content: space-between; align-items: center;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.15);
+  }
+  header .title { display: flex; align-items: center; gap: 10px; }
+  header .badge-icon {
+    width: 30px; height: 30px; border-radius: 8px; background: rgba(255,255,255,0.15);
+    display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 14px;
+  }
+  header h1 { font-size: 17px; margin: 0; font-weight: 600; }
+  header a { color: #cdd9e5; text-decoration: none; font-size: 13px; padding: 6px 12px; border-radius: 6px; transition: background .15s; }
+  header a:hover { color: white; background: rgba(255,255,255,0.1); }
+  main { padding: 28px 32px; max-width: 1320px; margin: 0 auto; }
+  .back-link { display: inline-flex; align-items: center; gap: 6px; margin-bottom: 18px; color: #2c70c9; text-decoration: none; font-size: 13px; font-weight: 600; }
+  .back-link:hover { text-decoration: underline; }
+  .toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
+  .toolbar label { font-size: 13px; color: #6b7785; font-weight: 600; }
+  .toolbar select {
+    padding: 8px 12px; border: 1px solid #e6e9ec; border-radius: 8px; font-size: 13px;
+    font-family: inherit; background: white;
+  }
+  .chart-wrap {
+    background: white; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.06);
+    padding: 20px 22px; margin-bottom: 18px;
+  }
+  .chart-row { display: flex; flex-wrap: wrap; gap: 18px; }
+  .chart-row .chart-wrap { flex: 1 1 320px; }
+  .empty { padding: 50px; text-align: center; color: #aab2ba; font-size: 14px; }
+  @media (max-width: 768px) {
+    header { padding: 14px 16px; }
+    main { padding: 16px; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="title">
+    <div class="badge-icon">฿</div>
+    <h1>รายงานรายเดือน</h1>
+  </div>
+  <a href="/logout">ออกจากระบบ</a>
+</header>
+<main>
+  <a class="back-link" href="/">&laquo; กลับหน้าหลัก</a>
+  {% if years %}
+  <div class="toolbar">
+    <label for="f-year">ปี</label>
+    <select id="f-year" onchange="location.href = '/reports?year=' + this.value">
+      {% for y in years %}
+      <option value="{{ y }}" {% if y == selected_year %}selected{% endif %}>{{ y }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  {% endif %}
+  <div class="chart-wrap">
+    {% if years %}
+    <canvas id="monthly-chart" height="100"></canvas>
+    {% else %}
+    <div class="empty">ยังไม่มีรายการ</div>
+    {% endif %}
+  </div>
+  {% if years %}
+  <div class="chart-row">
+    <div class="chart-wrap">
+      <canvas id="category-chart"></canvas>
+    </div>
+  </div>
+  {% endif %}
+</main>
+{% if years %}
+<script>
+const monthlyData = {{ monthly_chart|safe }};
+new Chart(document.getElementById('monthly-chart'), {
+  type: 'bar',
+  data: {
+    labels: monthlyData.labels,
+    datasets: [
+      { label: 'รายรับ', data: monthlyData.income, backgroundColor: '#1e8449' },
+      { label: 'รายจ่าย', data: monthlyData.expense, backgroundColor: '#c0392b' },
+    ],
+  },
+  options: {
+    responsive: true,
+    plugins: { legend: { position: 'top' } },
+    scales: { y: { beginAtZero: true } },
+  },
+});
+
+const categoryData = {{ category_chart|safe }};
+new Chart(document.getElementById('category-chart'), {
+  type: 'pie',
+  data: {
+    labels: categoryData.labels,
+    datasets: [{
+      data: categoryData.amounts,
+      backgroundColor: ['#c0392b', '#e67e22', '#f1c40f', '#2c70c9', '#5a4fcf', '#1e8449', '#97a3ad', '#8e44ad'],
+    }],
+  },
+  options: {
+    responsive: true,
+    plugins: { legend: { position: 'right' }, title: { display: true, text: 'รายจ่ายตามหมวด' } },
+  },
+});
+</script>
+{% endif %}
+</body>
+</html>

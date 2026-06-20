@@ -99,6 +99,14 @@
         <option value="unknown">ไม่ทราบ</option>
       </select>
 
+      <label>หมวด</label>
+      <select name="category">
+        <option value="">-- ไม่ระบุ --</option>
+        {% for c in categories %}
+        <option value="{{ c }}" {% if txn.category == c %}selected{% endif %}>{{ c }}</option>
+        {% endfor %}
+      </select>
+
       <label>ผู้โอน</label>
       <input name="sender_name" value="{{ txn.sender_name or '' }}">
       <label>เลขบัญชีผู้โอน</label>
