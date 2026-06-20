@@ -20,6 +20,10 @@
     display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 14px;
   }
   header h1 { font-size: 17px; margin: 0; font-weight: 600; }
+  header .role-pill {
+    font-size: 11px; padding: 2px 10px; border-radius: 10px; margin-left: 8px;
+    background: rgba(255,255,255,0.15); color: #cdd9e5; vertical-align: middle;
+  }
   header a { color: #cdd9e5; text-decoration: none; font-size: 13px; padding: 6px 12px; border-radius: 6px; transition: background .15s; }
   header a:hover { color: white; background: rgba(255,255,255,0.1); }
   main { padding: 28px 32px; max-width: 1800px; margin: 0 auto; }
@@ -47,7 +51,7 @@
 <header>
   <div class="title">
     <div class="badge-icon">฿</div>
-    <h1>ประวัติการแก้ไข</h1>
+    <h1>ประวัติการแก้ไข<span class="role-pill">{{ user }} · {{ "ผู้ดูแล" if role == "admin" else "ผู้เยี่ยมชม" }}</span></h1>
   </div>
   <a href="/logout">ออกจากระบบ</a>
 </header>

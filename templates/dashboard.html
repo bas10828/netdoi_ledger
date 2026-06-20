@@ -62,6 +62,9 @@
   table { width: 100%; border-collapse: collapse; }
   th, td { padding: 13px 14px; text-align: left; font-size: 13px; border-bottom: 1px solid #f0f2f5; white-space: nowrap; }
   th { background: #f7f8fa; color: #97a3ad; font-weight: 600; font-size: 11px; letter-spacing: .02em; position: sticky; top: 0; }
+  th.sortable { cursor: pointer; user-select: none; }
+  th.sortable:hover { color: #2c70c9; }
+  th.sortable .sort-arrow { display: inline-block; width: 10px; font-size: 10px; }
   tbody tr:nth-child(even) { background: #fafbfc; }
   tbody tr { transition: background .1s; }
   tbody tr:hover { background: #eef3fa; }
@@ -212,9 +215,9 @@
   {% if dup_color %}
   <button type="button" id="dup-toggle-btn" class="add-btn dup-toggle-btn" onclick="toggleDupOnly()">ดูเฉพาะรายการซ้ำ</button>
   {% endif %}
+  <a class="add-btn chat-btn" href="/chat">ดูแชตย้อนหลัง</a>
   {% if role == 'admin' %}
   <a class="add-btn" href="/transactions/new">+ เพิ่มรายการใหม่</a>
-  <a class="add-btn chat-btn" href="/chat">ดูแชตย้อนหลัง</a>
   <a class="add-btn audit-btn" href="/audit">ประวัติการแก้ไข</a>
   {% endif %}
   <div class="filter-bar">
@@ -283,14 +286,29 @@
   {% if rows %}
   <table>
     <thead>
-    <tr><th>รูป</th><th>วันที่</th><th>เวลา</th><th>ประเภท</th><th>ยอด</th><th>ธนาคาร</th><th>ผู้โอน</th><th>ผู้รับ</th><th>รายละเอียด</th><th>หมวด</th><th>เลขอ้างอิง (QR)</th><th>model</th><th>ยืนยันธนาคาร</th>{% if role == 'admin' %}<th>จัดการ</th>{% endif %}</tr>
+    <tr>
+      <th>รูป</th>
+      <th class="sortable" data-sort-key="date" data-sort-type="dataset" onclick="sortTable(this)">วันที่<span class="sort-arrow"></span></th>
+      <th class="sortable" data-sort-key="time" data-sort-type="text" onclick="sortTable(this)">เวลา<span class="sort-arrow"></span></th>
+      <th class="sortable" data-sort-key="direction" data-sort-type="dataset" onclick="sortTable(this)">ประเภท<span class="sort-arrow"></span></th>
+      <th class="sortable" data-sort-key="amount" data-sort-type="number" onclick="sortTable(this)">ยอด<span class="sort-arrow"></span></th>
+      <th class="sortable" data-sort-key="bank" data-sort-type="dataset" onclick="sortTable(this)">ธนาคาร<span class="sort-arrow"></span></th>
+      <th class="sortable" data-sort-key="sender" data-sort-type="text" onclick="sortTable(this)">ผู้โอน<span class="sort-arrow"></span></th>
+      <th class="sortable" data-sort-key="receiver" data-sort-type="text" onclick="sortTable(this)">ผู้รับ<span class="sort-arrow"></span></th>
+      <th class="sortable" data-sort-key="memo" data-sort-type="text" onclick="sortTable(this)">รายละเอียด<span class="sort-arrow"></span></th>
+      <th class="sortable" data-sort-key="category" data-sort-type="dataset" onclick="sortTable(this)">หมวด<span class="sort-arrow"></span></th>
+      <th class="sortable" data-sort-key="qr" data-sort-type="dataset" onclick="sortTable(this)">เลขอ้างอิง (QR)<span class="sort-arrow"></span></th>
+      <th class="sortable" data-sort-key="model" data-sort-type="text" onclick="sortTable(this)">model<span class="sort-arrow"></span></th>
+      <th class="sortable" data-sort-key="verified" data-sort-type="dataset" onclick="sortTable(this)">ยืนยันธนาคาร<span class="sort-arrow"></span></th>
+      {% if role == 'admin' %}<th>จัดการ</th>{% endif %}
+    </tr>
     </thead>
     <tbody id="txn-tbody">
     {% for r in rows %}
     <tr class="{{ dup_color.get(r.id, '') }}"
         data-direction="{{ r.direction }}" data-date="{{ r.txn_date }}" data-bank="{{ r.bank or '' }}"
         data-verified="{{ '1' if r.verified_bank else '0' }}" data-dup="{{ '1' if dup_color.get(r.id) else '0' }}"
-        data-category="{{ r.category or '' }}"
+        data-category="{{ r.category or '' }}" data-qr="{{ r.qr_trans_ref or r.printed_ref or '' }}"
         data-name="{{ (r.sender_name or '') ~ ' ' ~ (r.receiver_name or '') }}">
       <td>{% if r.raw_file_id %}<a href="/files/{{ r.raw_file_id }}" target="_blank"><img class="thumb" src="/files/{{ r.raw_file_id }}"></a>{% else %}-{% endif %}</td>
       <td>{{ r.txn_date }}</td>
@@ -371,6 +389,43 @@
 <script>
 let currentPage = 0;
 let dupOnlyMode = false;
+let sortState = { key: null, asc: true };
+
+function sortTable(th) {
+  const colIndex = Array.from(th.parentElement.children).indexOf(th);
+  const type = th.dataset.sortType;
+  const key = th.dataset.sortKey;
+  const asc = sortState.key === key ? !sortState.asc : true;
+  sortState = { key, asc };
+
+  const tbody = document.getElementById('txn-tbody');
+  const rows = Array.from(tbody.querySelectorAll('tr'));
+
+  rows.sort((a, b) => {
+    let va, vb;
+    if (type === 'number') {
+      va = parseFloat(a.children[colIndex].innerText.replace(/,/g, '')) || 0;
+      vb = parseFloat(b.children[colIndex].innerText.replace(/,/g, '')) || 0;
+    } else if (type === 'dataset') {
+      va = a.dataset[key] || '';
+      vb = b.dataset[key] || '';
+    } else {
+      va = a.children[colIndex].innerText.trim().toLowerCase();
+      vb = b.children[colIndex].innerText.trim().toLowerCase();
+    }
+    if (va < vb) return asc ? -1 : 1;
+    if (va > vb) return asc ? 1 : -1;
+    return 0;
+  });
+
+  rows.forEach(r => tbody.appendChild(r));
+
+  document.querySelectorAll('th.sortable .sort-arrow').forEach(el => el.textContent = '');
+  th.querySelector('.sort-arrow').textContent = asc ? '▲' : '▼';
+
+  currentPage = 0;
+  renderTable();
+}
 
 function toggleDupOnly() {
   dupOnlyMode = !dupOnlyMode;

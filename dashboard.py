@@ -9,15 +9,17 @@ Run:
 import io
 import json
 import os
+import uuid
 from collections import defaultdict
 from datetime import date, time
+from pathlib import Path
 
 import bcrypt
 import pandas as pd
 import psycopg2
 import psycopg2.extras
 from dotenv import load_dotenv
-from fastapi import FastAPI, Form, HTTPException, Request
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, RedirectResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
 from linebot.v3.messaging import ApiClient, Configuration, MessagingApi
@@ -26,6 +28,9 @@ from starlette.middleware.sessions import SessionMiddleware
 from categorize import CATEGORIES, guess_category
 
 load_dotenv()
+
+LINE_FILES_DIR = Path("line_files")
+LINE_FILES_DIR.mkdir(exist_ok=True)
 
 DATABASE_URL = os.environ["DATABASE_URL"]
 SESSION_SECRET = os.environ["DASHBOARD_SESSION_SECRET"]
@@ -126,6 +131,20 @@ def log_audit(cur, txn_id, action, username, before=None, after=None):
             json.dumps(after, default=str, ensure_ascii=False) if after is not None else None,
         ),
     )
+
+
+def save_uploaded_photo(cur, photo):
+    if not photo or not photo.filename:
+        return None
+    ext = Path(photo.filename).suffix or ".jpg"
+    local_path = LINE_FILES_DIR / f"{uuid.uuid4().hex}{ext}"
+    local_path.write_bytes(photo.file.read())
+    cur.execute(
+        """INSERT INTO raw_files (file_type, storage_path, is_slip, processed)
+           VALUES ('image', %s, false, true) RETURNING id""",
+        (str(local_path),),
+    )
+    return cur.fetchone()[0]
 
 
 @app.get("/")
@@ -235,6 +254,18 @@ def reports(request: Request, year: int = 0):
                 (year,),
             )
             category_rows = cur.fetchall()
+
+            cur.execute(
+                """SELECT COALESCE(receiver_name, 'ไม่ระบุ') AS receiver, SUM(amount) AS total
+                   FROM slip_transactions
+                   WHERE txn_date IS NOT NULL AND direction = 'expense'
+                         AND EXTRACT(year FROM txn_date) = %s
+                   GROUP BY 1
+                   ORDER BY 2 DESC
+                   LIMIT 5""",
+                (year,),
+            )
+            top_payees = [{"name": r[0], "total": float(r[1])} for r in cur.fetchall()]
     finally:
         conn.close()
 
@@ -247,6 +278,8 @@ def reports(request: Request, year: int = 0):
         "labels": [r[0] for r in category_rows],
         "amounts": [float(r[1]) for r in category_rows],
     }
+    total_expense = sum(monthly_chart["expense"])
+    total_income = sum(monthly_chart["income"])
 
     return templates.TemplateResponse(
         request,
@@ -256,6 +289,10 @@ def reports(request: Request, year: int = 0):
             "role": request.session.get("role"),
             "monthly_chart": json.dumps(monthly_chart),
             "category_chart": json.dumps(category_chart),
+            "total_expense": total_expense,
+            "total_income": total_income,
+            "net": total_income - total_expense,
+            "top_payees": top_payees,
             "years": years,
             "selected_year": year,
         },
@@ -503,7 +540,7 @@ def audit_view(request: Request):
 
 @app.get("/chat")
 def chat_view(request: Request):
-    redirect = require_admin(request)
+    redirect = require_login(request)
     if redirect:
         return redirect
 
@@ -527,7 +564,16 @@ def chat_view(request: Request):
 
     names = resolve_display_names(messages)
 
-    return templates.TemplateResponse(request, "chat.html", {"messages": messages, "names": names})
+    return templates.TemplateResponse(
+        request,
+        "chat.html",
+        {
+            "messages": messages,
+            "names": names,
+            "user": request.session.get("user"),
+            "role": request.session.get("role"),
+        },
+    )
 
 
 @app.get("/transactions/new")
@@ -543,7 +589,12 @@ def new_form(request: Request):
         "direction": "expense", "category": "", "status": "reviewed",
     }
     return templates.TemplateResponse(
-        request, "edit_transaction.html", {"txn": empty, "form_action": "/transactions/new"}
+        request,
+        "edit_transaction.html",
+        {
+            "txn": empty, "form_action": "/transactions/new",
+            "user": request.session.get("user"), "role": request.session.get("role"),
+        },
     )
 
 
@@ -563,6 +614,7 @@ def new_submit(
     direction: str = Form("expense"),
     category: str = Form(""),
     status: str = Form("reviewed"),
+    photo: UploadFile = File(None),
 ):
     redirect = require_admin(request)
     if redirect:
@@ -572,12 +624,13 @@ def new_submit(
     conn = db()
     try:
         with conn, conn.cursor() as cur:
+            raw_file_id = save_uploaded_photo(cur, photo)
             cur.execute(
                 """INSERT INTO slip_transactions
-                       (bank, txn_date, txn_time, amount, fee, sender_name, sender_account,
+                       (raw_file_id, bank, txn_date, txn_time, amount, fee, sender_name, sender_account,
                         receiver_name, receiver_account, memo, direction, category, status, ai_model)
-                   VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id""",
-                (bank, txn_date, txn_time, amount, fee, sender_name, sender_account,
+                   VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id""",
+                (raw_file_id, bank, txn_date, txn_time, amount, fee, sender_name, sender_account,
                  receiver_name, receiver_account, memo, direction, final_category, status, "manual"),
             )
             new_id = cur.fetchone()[0]
@@ -614,7 +667,12 @@ def edit_form(txn_id: int, request: Request):
     if not txn["category"]:
         txn["category"] = guess_category(txn["memo"])
     return templates.TemplateResponse(
-        request, "edit_transaction.html", {"txn": txn, "form_action": f"/transactions/{txn_id}/edit"}
+        request,
+        "edit_transaction.html",
+        {
+            "txn": txn, "form_action": f"/transactions/{txn_id}/edit",
+            "user": request.session.get("user"), "role": request.session.get("role"),
+        },
     )
 
 
@@ -635,6 +693,7 @@ def edit_submit(
     direction: str = Form("unknown"),
     category: str = Form(""),
     status: str = Form("reviewed"),
+    photo: UploadFile = File(None),
 ):
     redirect = require_admin(request)
     if redirect:
@@ -649,13 +708,16 @@ def edit_submit(
             before_row = cur.fetchone()
             before = dict(zip(columns, before_row)) if before_row else None
 
+            new_raw_file_id = save_uploaded_photo(cur, photo)
+            raw_file_id = new_raw_file_id if new_raw_file_id is not None else (before or {}).get("raw_file_id")
+
             cur.execute(
                 """UPDATE slip_transactions SET
-                       bank=%s, txn_date=%s, txn_time=%s, amount=%s, fee=%s,
+                       raw_file_id=%s, bank=%s, txn_date=%s, txn_time=%s, amount=%s, fee=%s,
                        sender_name=%s, sender_account=%s, receiver_name=%s, receiver_account=%s,
                        memo=%s, direction=%s, category=%s, status=%s
                    WHERE id=%s""",
-                (bank, txn_date, txn_time, amount, fee, sender_name, sender_account,
+                (raw_file_id, bank, txn_date, txn_time, amount, fee, sender_name, sender_account,
                  receiver_name, receiver_account, memo, direction, final_category, status, txn_id),
             )
             log_audit(

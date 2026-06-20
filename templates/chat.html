@@ -15,6 +15,10 @@
     box-shadow: 0 2px 12px rgba(0,0,0,0.15);
   }
   header h1 { font-size: 17px; margin: 0; font-weight: 600; }
+  header .role-pill {
+    font-size: 11px; padding: 2px 10px; border-radius: 10px; margin-left: 8px;
+    background: rgba(255,255,255,0.15); color: #cdd9e5; vertical-align: middle;
+  }
   header a { color: #cdd9e5; text-decoration: none; font-size: 13px; padding: 6px 12px; border-radius: 6px; transition: background .15s; }
   header a:hover { color: white; background: rgba(255,255,255,0.1); }
   main { padding: 28px 32px; max-width: 760px; margin: 0 auto; }
@@ -42,7 +46,17 @@
     font-size: 13px; color: #2c70c9; text-decoration: none;
   }
   .bubble .file-link:hover { text-decoration: underline; }
+  .bubble.hidden-msg { display: none; }
+  .bubble.jump-highlight .text { outline: 2px solid #2c70c9; }
   .empty { padding: 50px; text-align: center; color: #aab2ba; font-size: 14px; }
+  .toolbar { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 14px; }
+  .toolbar input {
+    padding: 8px 12px; border: 1px solid #e6e9ec; border-radius: 8px; font-size: 13px;
+    font-family: inherit; background: white;
+  }
+  .toolbar input[type="text"] { flex: 1; min-width: 160px; }
+  .toolbar input:focus { outline: none; border-color: #2c70c9; }
+  .search-count { font-size: 12px; color: #97a3ad; align-self: center; }
   @media (max-width: 768px) {
     header { padding: 14px 16px; }
     main { padding: 16px; }
@@ -53,15 +67,22 @@
 </head>
 <body>
 <header>
-  <h1>แชตย้อนหลัง</h1>
+  <h1>แชตย้อนหลัง<span class="role-pill">{{ user }} · {{ "ผู้ดูแล" if role == "admin" else "ผู้เยี่ยมชม" }}</span></h1>
   <a href="/logout">ออกจากระบบ</a>
 </header>
 <main>
   <a class="home-btn" href="/">&larr; หน้าแรก</a>
-  <div class="chat-wrap">
+  {% if messages %}
+  <div class="toolbar">
+    <input type="text" id="f-search" placeholder="ค้นหาข้อความ..." oninput="filterMessages()">
+    <input type="date" id="f-jump-date" onchange="jumpToDate()">
+    <span class="search-count" id="search-count"></span>
+  </div>
+  {% endif %}
+  <div class="chat-wrap" id="chat-wrap">
     {% if messages %}
       {% for m in messages %}
-      <div class="bubble">
+      <div class="bubble" data-date="{{ m.received_at.strftime('%Y-%m-%d') }}" data-text="{{ (m.text or '')|lower }}">
         <div class="meta">{{ names.get(m.line_user_id) or (m.line_user_id[-6:] if m.line_user_id else "ไม่ทราบผู้ส่ง") }} · {{ m.received_at.strftime("%d/%m/%Y %H:%M") }}</div>
         {% if m.kind == 'text' %}
         <div class="text">{{ m.text }}</div>
@@ -77,5 +98,33 @@
     {% endif %}
   </div>
 </main>
+<script>
+window.addEventListener('load', () => {
+  document.getElementById('chat-wrap').scrollTop = document.getElementById('chat-wrap').scrollHeight;
+});
+
+function filterMessages() {
+  const q = document.getElementById('f-search').value.trim().toLowerCase();
+  const bubbles = Array.from(document.querySelectorAll('.bubble'));
+  let matched = 0;
+  bubbles.forEach(b => {
+    const ok = !q || b.dataset.text.includes(q);
+    b.classList.toggle('hidden-msg', !ok);
+    if (ok && q) matched++;
+  });
+  document.getElementById('search-count').textContent = q ? `พบ ${matched} ข้อความ` : '';
+}
+
+function jumpToDate() {
+  const date = document.getElementById('f-jump-date').value;
+  if (!date) return;
+  const target = document.querySelector(`.bubble[data-date="${date}"]`);
+  document.getElementById('search-count').textContent = target ? '' : 'ไม่มีข้อความวันที่นี้';
+  if (!target) return;
+  target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  target.classList.add('jump-highlight');
+  setTimeout(() => target.classList.remove('jump-highlight'), 1500);
+}
+</script>
 </body>
 </html>
