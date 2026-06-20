@@ -18,7 +18,7 @@ import anthropic
 import psycopg2
 from dotenv import load_dotenv
 
-from categorize import guess_category
+from categorize import get_categories, guess_category
 from fastapi import FastAPI, Header, HTTPException, Request
 from linebot.v3.exceptions import InvalidSignatureError
 from linebot.v3.messaging import ApiClient, Configuration, MessagingApiBlob
@@ -136,6 +136,7 @@ def extract_and_store(path: Path, raw_file_id: int):
     conn = db()
     try:
         with conn, conn.cursor() as cur:
+            category = guess_category(s.memo, get_categories(cur))
             cur.execute(
                 """INSERT INTO slip_transactions
                    (raw_file_id, bank, txn_date, txn_time, amount, fee, sender_name, sender_account,
@@ -143,7 +144,7 @@ def extract_and_store(path: Path, raw_file_id: int):
                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
                 (raw_file_id, s.bank, s.date, s.time, s.amount, s.fee, s.sender_name, s.sender_account,
                  s.receiver_name, s.receiver_account, s.memo, s.printed_ref, ref_qr, dirn,
-                 guess_category(s.memo), MODEL),
+                 category, MODEL),
             )
             cur.execute("UPDATE raw_files SET processed = true WHERE id = %s", (raw_file_id,))
             cur.execute(

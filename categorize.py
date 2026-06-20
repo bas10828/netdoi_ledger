@@ -1,49 +1,22 @@
-"""Keyword-based category guesser for slip memo text. Editable by admins regardless of guess.
-
-Categories follow standard Thai SME operating-expense chart of accounts, tuned for a
-network-equipment installer/reseller business (sales + install team + documentation team).
+"""Category guessing for slip memo text. Categories + keywords are stored in the `categories`
+table (admin-editable via /settings/categories), not hardcoded here.
 """
 
-CATEGORIES = [
-    "เงินเดือนและค่าแรง",
-    "ค่าเช่า",
-    "ค่าน้ำค่าไฟ",
-    "ค่าอุปกรณ์/สินค้า (ต้นทุนขาย)",
-    "ค่าวัสดุสิ้นเปลืองงานติดตั้ง",
-    "ค่าน้ำมันเชื้อเพลิง",
-    "ค่าซ่อมแซมและบำรุงรักษา",
-    "ค่าโฆษณาและส่งเสริมการขาย",
-    "ค่าใช้จ่ายสำนักงาน/ไปรษณีย์",
-    "ค่าบริการวิชาชีพ/ซอฟต์แวร์",
-    "ค่าธรรมเนียมธนาคาร",
-    "อื่นๆ",
-]
-
-CATEGORY_KEYWORDS = {
-    "เงินเดือนและค่าแรง": ["เงินเดือน", "ค่าแรง", "ค่าจ้าง"],
-    "ค่าเช่า": ["ค่าเช่า", "เช่าตึก", "เช่าบ้าน", "เช่าสำนักงาน"],
-    "ค่าน้ำค่าไฟ": ["ค่าน้ำ", "ค่าไฟ", "การไฟฟ้า", "การประปา"],
-    "ค่าอุปกรณ์/สินค้า (ต้นทุนขาย)": [
-        "อุปกรณ์เน็ตเวิร์ค", "สวิตช์", "เราเตอร์", "access point", "สาย LAN", "เคเบิล",
-        "กล้องวงจรปิด", "ซื้อสินค้า", "ซื้ออุปกรณ์",
-    ],
-    "ค่าวัสดุสิ้นเปลืองงานติดตั้ง": [
-        "ถุงขยะ", "ท่อหด", "กิ๊บตอกสาย", "กิ๊บ", "สายรัด", "เทปพันสาย", "วัสดุสิ้นเปลือง",
-    ],
-    "ค่าน้ำมันเชื้อเพลิง": ["เติมน้ำมัน", "น้ำมัน", "ปั๊ม", "ปตท", "เชื้อเพลิง"],
-    "ค่าซ่อมแซมและบำรุงรักษา": ["ซ่อม", "เปลี่ยนแบต", "บำรุงรักษา", "อะไหล่"],
-    "ค่าโฆษณาและส่งเสริมการขาย": ["โฆษณา", "แอด", "ads", "โปรโมท"],
-    "ค่าใช้จ่ายสำนักงาน/ไปรษณีย์": ["เอกสาร", "ไปรษณีย์", "ค่าส่ง", "วัสดุสำนักงาน", "เครื่องเขียน"],
-    "ค่าบริการวิชาชีพ/ซอฟต์แวร์": ["โปรแกรม", "ซอฟต์แวร์", "สมาชิก", "subscription", "บริการ ai", "flowaccount", "ที่ปรึกษา"],
-    "ค่าธรรมเนียมธนาคาร": ["ค่าธรรมเนียม", "ธนาคาร"],
-}
+import psycopg2.extras
 
 
-def guess_category(memo):
+def get_categories(cur):
+    """Works regardless of the calling cursor's factory — opens its own RealDictCursor."""
+    with cur.connection.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as c:
+        c.execute("SELECT name, keywords FROM categories ORDER BY sort_order, id")
+        return [{"name": r["name"], "keywords": list(r["keywords"] or [])} for r in c.fetchall()]
+
+
+def guess_category(memo, categories):
     if not memo:
         return None
     text = memo.lower()
-    for category, keywords in CATEGORY_KEYWORDS.items():
-        if any(kw.lower() in text for kw in keywords):
-            return category
+    for cat in categories:
+        if any(kw.lower() in text for kw in cat["keywords"]):
+            return cat["name"]
     return None

@@ -23,9 +23,10 @@ from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, RedirectResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
 from linebot.v3.messaging import ApiClient, Configuration, MessagingApi
+from openpyxl.chart import BarChart, PieChart, Reference
 from starlette.middleware.sessions import SessionMiddleware
 
-from categorize import CATEGORIES, guess_category
+from categorize import get_categories, guess_category
 
 load_dotenv()
 
@@ -36,10 +37,14 @@ DATABASE_URL = os.environ["DATABASE_URL"]
 SESSION_SECRET = os.environ["DASHBOARD_SESSION_SECRET"]
 LINE_ACCESS_TOKEN = os.environ.get("LINE_CHANNEL_ACCESS_TOKEN", "")
 
+THAI_MONTHS = {
+    1: "ม.ค.", 2: "ก.พ.", 3: "มี.ค.", 4: "เม.ย.", 5: "พ.ค.", 6: "มิ.ย.",
+    7: "ก.ค.", 8: "ส.ค.", 9: "ก.ย.", 10: "ต.ค.", 11: "พ.ย.", 12: "ธ.ค.",
+}
+
 app = FastAPI()
 app.add_middleware(SessionMiddleware, secret_key=SESSION_SECRET, same_site="lax")
 templates = Jinja2Templates(directory="templates")
-templates.env.globals["categories"] = CATEGORIES
 
 
 def db():
@@ -168,6 +173,7 @@ def dashboard(request: Request):
             cur.execute("SELECT COALESCE(SUM(cost_usd), 0) AS total FROM ai_usage_log")
             ai_spent = float(cur.fetchone()["total"])
             ai_starting_balance = float(get_setting(cur, "ai_starting_balance_usd", "0"))
+            categories = [c["name"] for c in get_categories(cur)]
     finally:
         conn.close()
 
@@ -207,12 +213,145 @@ def dashboard(request: Request):
             "count": len(counted_rows),
             "ai_balance": ai_starting_balance - ai_spent,
             "ai_starting_balance": ai_starting_balance,
+            "categories": categories,
         },
     )
 
 
+def _period_filter(granularity, year, month, day):
+    if granularity == "day":
+        return "txn_date = %s", (date(year, month, day),)
+    if granularity == "month":
+        return "EXTRACT(year FROM txn_date) = %s AND EXTRACT(month FROM txn_date) = %s", (year, month)
+    return "EXTRACT(year FROM txn_date) = %s", (year,)
+
+
+def fetch_report_data(cur, granularity, year, month, day):
+    if granularity not in ("year", "month", "day"):
+        granularity = "year"
+
+    cur.execute(
+        """SELECT DISTINCT EXTRACT(year FROM txn_date)::int AS y
+           FROM slip_transactions
+           WHERE txn_date IS NOT NULL
+           ORDER BY 1 DESC"""
+    )
+    years = [r[0] for r in cur.fetchall()]
+    if not year:
+        year = years[0] if years else date.today().year
+
+    months = []
+    if granularity in ("month", "day"):
+        cur.execute(
+            """SELECT DISTINCT EXTRACT(month FROM txn_date)::int AS m
+               FROM slip_transactions
+               WHERE txn_date IS NOT NULL AND EXTRACT(year FROM txn_date) = %s
+               ORDER BY 1 DESC""",
+            (year,),
+        )
+        months = [r[0] for r in cur.fetchall()]
+        if not month:
+            month = months[0] if months else date.today().month
+
+    days = []
+    if granularity == "day":
+        cur.execute(
+            """SELECT DISTINCT EXTRACT(day FROM txn_date)::int AS d
+               FROM slip_transactions
+               WHERE txn_date IS NOT NULL AND EXTRACT(year FROM txn_date) = %s
+                     AND EXTRACT(month FROM txn_date) = %s
+               ORDER BY 1 DESC""",
+            (year, month),
+        )
+        days = [r[0] for r in cur.fetchall()]
+        if not day:
+            day = days[0] if days else 1
+
+    if granularity == "day":
+        cur.execute(
+            """SELECT to_char(txn_time, 'HH24:00') AS bucket,
+                      COALESCE(SUM(amount) FILTER (WHERE direction = 'expense'), 0) AS expense,
+                      COALESCE(SUM(amount) FILTER (WHERE direction = 'income'), 0) AS income
+               FROM slip_transactions
+               WHERE txn_date = %s AND direction IN ('expense', 'income')
+               GROUP BY 1
+               ORDER BY 1""",
+            (date(year, month, day),),
+        )
+    elif granularity == "month":
+        cur.execute(
+            """SELECT to_char(txn_date, 'DD') AS bucket,
+                      COALESCE(SUM(amount) FILTER (WHERE direction = 'expense'), 0) AS expense,
+                      COALESCE(SUM(amount) FILTER (WHERE direction = 'income'), 0) AS income
+               FROM slip_transactions
+               WHERE txn_date IS NOT NULL AND direction IN ('expense', 'income')
+                     AND EXTRACT(year FROM txn_date) = %s AND EXTRACT(month FROM txn_date) = %s
+               GROUP BY 1
+               ORDER BY 1""",
+            (year, month),
+        )
+    else:
+        cur.execute(
+            """SELECT to_char(date_trunc('month', txn_date), 'YYYY-MM') AS bucket,
+                      COALESCE(SUM(amount) FILTER (WHERE direction = 'expense'), 0) AS expense,
+                      COALESCE(SUM(amount) FILTER (WHERE direction = 'income'), 0) AS income
+               FROM slip_transactions
+               WHERE txn_date IS NOT NULL AND direction IN ('expense', 'income')
+                     AND EXTRACT(year FROM txn_date) = %s
+               GROUP BY 1
+               ORDER BY 1""",
+            (year,),
+        )
+    bucket_rows = cur.fetchall()
+
+    period_sql, period_params = _period_filter(granularity, year, month, day)
+
+    cur.execute(
+        f"""SELECT COALESCE(category, 'ไม่ระบุหมวด') AS category, SUM(amount) AS total
+            FROM slip_transactions
+            WHERE txn_date IS NOT NULL AND direction = 'expense' AND {period_sql}
+            GROUP BY 1
+            ORDER BY 2 DESC""",
+        period_params,
+    )
+    category_rows = [{"name": r[0], "total": float(r[1])} for r in cur.fetchall()]
+
+    cur.execute(
+        f"""SELECT COALESCE(receiver_name, 'ไม่ระบุ') AS receiver, SUM(amount) AS total
+            FROM slip_transactions
+            WHERE txn_date IS NOT NULL AND direction = 'expense' AND {period_sql}
+            GROUP BY 1
+            ORDER BY 2 DESC
+            LIMIT 5""",
+        period_params,
+    )
+    top_payees = [{"name": r[0], "total": float(r[1])} for r in cur.fetchall()]
+
+    bucket_chart = {
+        "labels": [r[0] for r in bucket_rows],
+        "expense": [float(r[1]) for r in bucket_rows],
+        "income": [float(r[2]) for r in bucket_rows],
+    }
+    total_expense = sum(bucket_chart["expense"])
+    total_income = sum(bucket_chart["income"])
+
+    if granularity == "day":
+        period_label = f"{day} {THAI_MONTHS.get(month, month)} {year}"
+    elif granularity == "month":
+        period_label = f"{THAI_MONTHS.get(month, month)} {year}"
+    else:
+        period_label = f"ปี {year}"
+
+    return {
+        "granularity": granularity, "years": years, "months": months, "days": days,
+        "year": year, "month": month, "day": day, "period_label": period_label,
+        "bucket_chart": bucket_chart, "category_rows": category_rows, "top_payees": top_payees,
+        "total_expense": total_expense, "total_income": total_income, "net": total_income - total_expense,
+    }
+
+
 @app.get("/reports")
-def reports(request: Request, year: int = 0):
+def reports(request: Request, granularity: str = "month", year: int = 0, month: int = 0, day: int = 0):
     redirect = require_login(request)
     if redirect:
         return redirect
@@ -220,66 +359,14 @@ def reports(request: Request, year: int = 0):
     conn = db()
     try:
         with conn.cursor() as cur:
-            cur.execute(
-                """SELECT DISTINCT EXTRACT(year FROM txn_date)::int AS y
-                   FROM slip_transactions
-                   WHERE txn_date IS NOT NULL
-                   ORDER BY 1 DESC"""
-            )
-            years = [r[0] for r in cur.fetchall()]
-
-            if not year:
-                year = years[0] if years else date.today().year
-
-            cur.execute(
-                """SELECT to_char(date_trunc('month', txn_date), 'YYYY-MM') AS month,
-                          COALESCE(SUM(amount) FILTER (WHERE direction = 'expense'), 0) AS expense,
-                          COALESCE(SUM(amount) FILTER (WHERE direction = 'income'), 0) AS income
-                   FROM slip_transactions
-                   WHERE txn_date IS NOT NULL AND direction IN ('expense', 'income')
-                         AND EXTRACT(year FROM txn_date) = %s
-                   GROUP BY 1
-                   ORDER BY 1""",
-                (year,),
-            )
-            month_rows = cur.fetchall()
-
-            cur.execute(
-                """SELECT COALESCE(category, 'ไม่ระบุหมวด') AS category, SUM(amount) AS total
-                   FROM slip_transactions
-                   WHERE txn_date IS NOT NULL AND direction = 'expense'
-                         AND EXTRACT(year FROM txn_date) = %s
-                   GROUP BY 1
-                   ORDER BY 2 DESC""",
-                (year,),
-            )
-            category_rows = cur.fetchall()
-
-            cur.execute(
-                """SELECT COALESCE(receiver_name, 'ไม่ระบุ') AS receiver, SUM(amount) AS total
-                   FROM slip_transactions
-                   WHERE txn_date IS NOT NULL AND direction = 'expense'
-                         AND EXTRACT(year FROM txn_date) = %s
-                   GROUP BY 1
-                   ORDER BY 2 DESC
-                   LIMIT 5""",
-                (year,),
-            )
-            top_payees = [{"name": r[0], "total": float(r[1])} for r in cur.fetchall()]
+            data = fetch_report_data(cur, granularity, year, month, day)
     finally:
         conn.close()
 
-    monthly_chart = {
-        "labels": [r[0] for r in month_rows],
-        "expense": [float(r[1]) for r in month_rows],
-        "income": [float(r[2]) for r in month_rows],
-    }
     category_chart = {
-        "labels": [r[0] for r in category_rows],
-        "amounts": [float(r[1]) for r in category_rows],
+        "labels": [c["name"] for c in data["category_rows"]],
+        "amounts": [c["total"] for c in data["category_rows"]],
     }
-    total_expense = sum(monthly_chart["expense"])
-    total_income = sum(monthly_chart["income"])
 
     return templates.TemplateResponse(
         request,
@@ -287,15 +374,127 @@ def reports(request: Request, year: int = 0):
         {
             "user": request.session.get("user"),
             "role": request.session.get("role"),
-            "monthly_chart": json.dumps(monthly_chart),
+            "monthly_chart": json.dumps(data["bucket_chart"]),
             "category_chart": json.dumps(category_chart),
-            "total_expense": total_expense,
-            "total_income": total_income,
-            "net": total_income - total_expense,
-            "top_payees": top_payees,
-            "years": years,
-            "selected_year": year,
+            "total_expense": data["total_expense"],
+            "total_income": data["total_income"],
+            "net": data["net"],
+            "top_payees": data["top_payees"],
+            "years": data["years"],
+            "months": data["months"],
+            "days": data["days"],
+            "selected_year": data["year"],
+            "selected_month": data["month"],
+            "selected_day": data["day"],
+            "granularity": data["granularity"],
+            "period_label": data["period_label"],
+            "thai_months": THAI_MONTHS,
         },
+    )
+
+
+@app.get("/reports/export/excel")
+def reports_export_excel(request: Request, granularity: str = "year", year: int = 0, month: int = 0, day: int = 0):
+    redirect = require_login(request)
+    if redirect:
+        return redirect
+
+    conn = db()
+    try:
+        with conn.cursor() as cur:
+            data = fetch_report_data(cur, granularity, year, month, day)
+    finally:
+        conn.close()
+
+    summary_df = pd.DataFrame(
+        [
+            ("ช่วงเวลา", data["period_label"]),
+            ("รายจ่าย", data["total_expense"]),
+            ("รายรับ", data["total_income"]),
+            ("สุทธิ", data["net"]),
+        ],
+        columns=["รายการ", "ค่า"],
+    )
+    category_df = pd.DataFrame(
+        [(c["name"], c["total"]) for c in data["category_rows"]], columns=["หมวด", "ยอด (บาท)"]
+    )
+    payee_df = pd.DataFrame(
+        [(i + 1, p["name"], p["total"]) for i, p in enumerate(data["top_payees"])],
+        columns=["อันดับ", "ผู้รับ", "ยอด (บาท)"],
+    )
+    bucket_df = pd.DataFrame(
+        {
+            "ช่วง": data["bucket_chart"]["labels"],
+            "รายจ่าย": data["bucket_chart"]["expense"],
+            "รายรับ": data["bucket_chart"]["income"],
+        }
+    )
+
+    buf = io.BytesIO()
+    with pd.ExcelWriter(buf, engine="openpyxl") as writer:
+        summary_df.to_excel(writer, sheet_name="สรุป", index=False)
+        category_df.to_excel(writer, sheet_name="ตามหมวด", index=False)
+        payee_df.to_excel(writer, sheet_name="Top ผู้รับเงิน", index=False)
+        bucket_df.to_excel(writer, sheet_name="กราฟ", index=False)
+
+        if len(bucket_df):
+            bar = BarChart()
+            bar.title = "รายรับ-รายจ่ายตามช่วงเวลา"
+            bar.y_axis.title = "บาท"
+            ws = writer.sheets["กราฟ"]
+            n = len(bucket_df) + 1
+            bar.add_data(Reference(ws, min_col=2, max_col=3, min_row=1, max_row=n), titles_from_data=True)
+            bar.set_categories(Reference(ws, min_col=1, min_row=2, max_row=n))
+            ws.add_chart(bar, "E2")
+
+        if len(category_df):
+            pie = PieChart()
+            pie.title = "แยกตามหมวด"
+            ws2 = writer.sheets["ตามหมวด"]
+            n2 = len(category_df) + 1
+            pie.add_data(Reference(ws2, min_col=2, min_row=1, max_row=n2), titles_from_data=True)
+            pie.set_categories(Reference(ws2, min_col=1, min_row=2, max_row=n2))
+            ws2.add_chart(pie, "D2")
+    buf.seek(0)
+
+    filename = f"report_summary_{date.today().isoformat()}.xlsx"
+    return StreamingResponse(
+        buf,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@app.get("/reports/export/pdf")
+def reports_export_pdf(request: Request, granularity: str = "year", year: int = 0, month: int = 0, day: int = 0):
+    redirect = require_login(request)
+    if redirect:
+        return redirect
+
+    try:
+        from export_report import build_summary_pdf
+    except RuntimeError as e:
+        raise HTTPException(500, str(e))
+
+    conn = db()
+    try:
+        with conn.cursor() as cur:
+            data = fetch_report_data(cur, granularity, year, month, day)
+    finally:
+        conn.close()
+
+    buf = io.BytesIO()
+    build_summary_pdf(
+        data["period_label"], data["total_expense"], data["total_income"], data["net"],
+        data["category_rows"], data["top_payees"], data["bucket_chart"], buf,
+    )
+    buf.seek(0)
+
+    filename = f"report_summary_{date.today().isoformat()}.pdf"
+    return StreamingResponse(
+        buf,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 
 
@@ -452,6 +651,114 @@ def update_ai_balance(request: Request, value: float = Form(...)):
     return RedirectResponse("/", status_code=302)
 
 
+@app.get("/settings/categories")
+def categories_view(request: Request):
+    redirect = require_admin(request)
+    if redirect:
+        return redirect
+
+    conn = db()
+    try:
+        with conn.cursor() as cur:
+            categories = get_categories(cur)
+    finally:
+        conn.close()
+
+    return templates.TemplateResponse(
+        request,
+        "settings_categories.html",
+        {
+            "user": request.session.get("user"), "role": request.session.get("role"),
+            "categories": categories,
+        },
+    )
+
+
+@app.post("/settings/categories/new")
+def categories_new(request: Request, name: str = Form(...), keywords: str = Form("")):
+    redirect = require_admin(request)
+    if redirect:
+        return redirect
+
+    kw_list = [k.strip() for k in keywords.split(",") if k.strip()]
+    conn = db()
+    try:
+        with conn, conn.cursor() as cur:
+            cur.execute("SELECT COALESCE(MAX(sort_order), 0) + 1 FROM categories")
+            next_order = cur.fetchone()[0]
+            cur.execute(
+                "INSERT INTO categories (name, keywords, sort_order) VALUES (%s, %s, %s)",
+                (name.strip(), kw_list, next_order),
+            )
+    finally:
+        conn.close()
+
+    return RedirectResponse("/settings/categories", status_code=302)
+
+
+@app.post("/settings/categories/{cat_id}/edit")
+def categories_edit(cat_id: int, request: Request, name: str = Form(...), keywords: str = Form("")):
+    redirect = require_admin(request)
+    if redirect:
+        return redirect
+
+    kw_list = [k.strip() for k in keywords.split(",") if k.strip()]
+    conn = db()
+    try:
+        with conn, conn.cursor() as cur:
+            cur.execute(
+                "UPDATE categories SET name = %s, keywords = %s WHERE id = %s",
+                (name.strip(), kw_list, cat_id),
+            )
+    finally:
+        conn.close()
+
+    return RedirectResponse("/settings/categories", status_code=302)
+
+
+@app.post("/settings/categories/{cat_id}/delete")
+def categories_delete(cat_id: int, request: Request):
+    redirect = require_admin(request)
+    if redirect:
+        return redirect
+
+    conn = db()
+    try:
+        with conn, conn.cursor() as cur:
+            cur.execute("DELETE FROM categories WHERE id = %s", (cat_id,))
+    finally:
+        conn.close()
+
+    return RedirectResponse("/settings/categories", status_code=302)
+
+
+@app.post("/settings/categories/{cat_id}/move")
+def categories_move(cat_id: int, request: Request, direction: str = Form(...)):
+    redirect = require_admin(request)
+    if redirect:
+        return redirect
+    if direction not in ("up", "down"):
+        raise HTTPException(400)
+
+    conn = db()
+    try:
+        with conn, conn.cursor() as cur:
+            cur.execute("SELECT id, sort_order FROM categories ORDER BY sort_order, id")
+            rows = cur.fetchall()
+            ids = [r[0] for r in rows]
+            idx = ids.index(cat_id)
+            swap_idx = idx - 1 if direction == "up" else idx + 1
+            if 0 <= swap_idx < len(rows):
+                a_id, a_order = rows[idx]
+                b_id, b_order = rows[swap_idx]
+                cur.execute("UPDATE categories SET sort_order = %s WHERE id = %s", (b_order, a_id))
+                cur.execute("UPDATE categories SET sort_order = %s WHERE id = %s", (a_order, b_id))
+    finally:
+        conn.close()
+
+    return RedirectResponse("/settings/categories", status_code=302)
+
+
 def resolve_display_names(messages):
     names = {}
     if not LINE_ACCESS_TOKEN:
@@ -588,11 +895,18 @@ def new_form(request: Request):
         "receiver_name": "", "receiver_account": "", "memo": "",
         "direction": "expense", "category": "", "status": "reviewed",
     }
+    conn = db()
+    try:
+        with conn.cursor() as cur:
+            categories = [c["name"] for c in get_categories(cur)]
+    finally:
+        conn.close()
+
     return templates.TemplateResponse(
         request,
         "edit_transaction.html",
         {
-            "txn": empty, "form_action": "/transactions/new",
+            "txn": empty, "form_action": "/transactions/new", "categories": categories,
             "user": request.session.get("user"), "role": request.session.get("role"),
         },
     )
@@ -620,10 +934,10 @@ def new_submit(
     if redirect:
         return redirect
 
-    final_category = category or guess_category(memo)
     conn = db()
     try:
         with conn, conn.cursor() as cur:
+            final_category = category or guess_category(memo, get_categories(cur))
             raw_file_id = save_uploaded_photo(cur, photo)
             cur.execute(
                 """INSERT INTO slip_transactions
@@ -659,18 +973,20 @@ def edit_form(txn_id: int, request: Request):
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             cur.execute("SELECT * FROM slip_transactions WHERE id = %s", (txn_id,))
             txn = cur.fetchone()
+            categories = get_categories(cur)
     finally:
         conn.close()
 
     if not txn:
         raise HTTPException(404)
     if not txn["category"]:
-        txn["category"] = guess_category(txn["memo"])
+        txn["category"] = guess_category(txn["memo"], categories)
     return templates.TemplateResponse(
         request,
         "edit_transaction.html",
         {
             "txn": txn, "form_action": f"/transactions/{txn_id}/edit",
+            "categories": [c["name"] for c in categories],
             "user": request.session.get("user"), "role": request.session.get("role"),
         },
     )
@@ -764,13 +1080,15 @@ def update_category(txn_id: int, request: Request, category: str = Form("")):
     redirect = require_admin(request)
     if redirect:
         return redirect
-    if category and category not in CATEGORIES:
-        raise HTTPException(400)
 
     final_category = category or None
     conn = db()
     try:
         with conn, conn.cursor() as cur:
+            if category:
+                valid_names = [c["name"] for c in get_categories(cur)]
+                if category not in valid_names:
+                    raise HTTPException(400)
             cur.execute("SELECT category FROM slip_transactions WHERE id = %s", (txn_id,))
             old = cur.fetchone()
             cur.execute("UPDATE slip_transactions SET category = %s WHERE id = %s", (final_category, txn_id))

@@ -98,3 +98,12 @@ CREATE TABLE audit_log (
 
 CREATE INDEX idx_audit_log_txn_id ON audit_log (txn_id);
 CREATE INDEX idx_audit_log_changed_at ON audit_log (changed_at);
+
+CREATE TABLE categories (
+    id          serial PRIMARY KEY,
+    name        text UNIQUE NOT NULL,
+    keywords    text[] NOT NULL DEFAULT '{}',
+    sort_order  integer NOT NULL,
+    created_at  timestamptz NOT NULL DEFAULT now()
+);
+-- seeded data: see migrations/2026-06-20_categories_table.sql

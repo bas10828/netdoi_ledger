@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>จัดการหมวด</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: "Sarabun", sans-serif; background: #eef1f5; margin: 0; color: #1c2833; }
+  header {
+    background: linear-gradient(120deg, #1e2a38, #2c3e50 60%, #34495e);
+    color: white; padding: 18px 32px; display: flex; justify-content: space-between; align-items: center;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.15);
+  }
+  header .title { display: flex; align-items: center; gap: 10px; }
+  header .badge-icon {
+    width: 30px; height: 30px; border-radius: 8px; background: rgba(255,255,255,0.15);
+    display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 14px;
+  }
+  header h1 { font-size: 17px; margin: 0; font-weight: 600; }
+  header .role-pill {
+    font-size: 11px; padding: 2px 10px; border-radius: 10px; margin-left: 8px;
+    background: rgba(255,255,255,0.15); color: #cdd9e5; vertical-align: middle;
+  }
+  header a { color: #cdd9e5; text-decoration: none; font-size: 13px; padding: 6px 12px; border-radius: 6px; transition: background .15s; }
+  header a:hover { color: white; background: rgba(255,255,255,0.1); }
+  main { padding: 28px 32px; max-width: 900px; margin: 0 auto; }
+  .back-link { display: inline-flex; align-items: center; gap: 6px; margin-bottom: 18px; color: #2c70c9; text-decoration: none; font-size: 13px; font-weight: 600; }
+  .back-link:hover { text-decoration: underline; }
+  .table-wrap { background: white; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.06); padding: 8px; margin-bottom: 20px; }
+  .cat-row {
+    display: flex; align-items: center; gap: 10px; padding: 12px 10px; border-bottom: 1px solid #f0f2f5;
+  }
+  .cat-row:last-child { border-bottom: none; }
+  .cat-row .move-col { display: flex; flex-direction: column; gap: 2px; }
+  .cat-row .move-col button {
+    border: none; background: #f0f2f5; border-radius: 4px; width: 22px; height: 18px; cursor: pointer; font-size: 10px;
+  }
+  .cat-row .move-col button:hover { background: #e1e5e9; }
+  .cat-row form.inline-edit { flex: 1; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .cat-row input[type="text"] {
+    padding: 7px 10px; border: 1.5px solid #e1e5e9; border-radius: 8px; font-size: 13px; font-family: inherit;
+  }
+  .cat-row .name-input { flex: 0 0 220px; font-weight: 600; }
+  .cat-row .keywords-input { flex: 1; min-width: 200px; }
+  .cat-row button.save-btn {
+    padding: 7px 14px; border: none; border-radius: 8px; background: #2c70c9; color: white;
+    font-size: 12px; font-weight: 600; cursor: pointer; font-family: inherit;
+  }
+  .cat-row button.save-btn:hover { background: #235ba3; }
+  .cat-row .del-form button {
+    border: none; background: none; color: #c0392b; font-size: 12px; font-weight: 600; cursor: pointer; font-family: inherit;
+  }
+  .cat-row .del-form button:hover { text-decoration: underline; }
+  .add-wrap {
+    background: white; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.06); padding: 18px 20px;
+  }
+  .add-wrap h3 { font-size: 14px; margin: 0 0 12px; }
+  .add-wrap form { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  .add-wrap input[type="text"] {
+    padding: 9px 12px; border: 1.5px solid #e1e5e9; border-radius: 8px; font-size: 13px; font-family: inherit;
+  }
+  .add-wrap .name-input { flex: 0 0 220px; }
+  .add-wrap .keywords-input { flex: 1; min-width: 220px; }
+  .add-wrap button {
+    padding: 9px 18px; border: none; border-radius: 8px; background: #1e8449; color: white;
+    font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit;
+  }
+  .add-wrap button:hover { background: #186a3a; }
+  .hint { font-size: 11px; color: #97a3ad; margin-top: 8px; }
+  .empty { padding: 30px; text-align: center; color: #aab2ba; font-size: 14px; }
+  @media (max-width: 768px) {
+    header { padding: 14px 16px; }
+    main { padding: 16px; }
+    .cat-row { flex-wrap: wrap; }
+    .cat-row .name-input, .cat-row .keywords-input { flex: 1 1 100%; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="title">
+    <div class="badge-icon">฿</div>
+    <h1>จัดการหมวด<span class="role-pill">{{ user }} · {{ "ผู้ดูแล" if role == "admin" else "ผู้เยี่ยมชม" }}</span></h1>
+  </div>
+  <a href="/logout">ออกจากระบบ</a>
+</header>
+<main>
+  <a class="back-link" href="/">&laquo; กลับหน้าหลัก</a>
+  <div class="table-wrap">
+    {% if categories %}
+    {% for c in categories %}
+    <div class="cat-row">
+      <div class="move-col">
+        <form method="post" action="/settings/categories/{{ c.id }}/move">
+          <input type="hidden" name="direction" value="up">
+          <button type="submit" title="ขึ้น">&#9650;</button>
+        </form>
+        <form method="post" action="/settings/categories/{{ c.id }}/move">
+          <input type="hidden" name="direction" value="down">
+          <button type="submit" title="ลง">&#9660;</button>
+        </form>
+      </div>
+      <form class="inline-edit" method="post" action="/settings/categories/{{ c.id }}/edit">
+        <input class="name-input" type="text" name="name" value="{{ c.name }}" required>
+        <input class="keywords-input" type="text" name="keywords" value="{{ c.keywords|join(', ') }}" placeholder="keyword คั่นด้วย comma">
+        <button type="submit" class="save-btn">บันทึก</button>
+      </form>
+      <form class="del-form" method="post" action="/settings/categories/{{ c.id }}/delete" onsubmit="return confirm('ลบหมวดนี้?');">
+        <button type="submit">ลบ</button>
+      </form>
+    </div>
+    {% endfor %}
+    {% else %}
+    <div class="empty">ยังไม่มีหมวด</div>
+    {% endif %}
+  </div>
+  <div class="add-wrap">
+    <h3>เพิ่มหมวดใหม่</h3>
+    <form method="post" action="/settings/categories/new">
+      <input class="name-input" type="text" name="name" placeholder="ชื่อหมวด" required>
+      <input class="keywords-input" type="text" name="keywords" placeholder="keyword คั่นด้วย comma เช่น เติมน้ำมัน, ปั๊ม, ปตท">
+      <button type="submit">+ เพิ่ม</button>
+    </form>
+    <div class="hint">ลำดับมีผลกับการเดาหมวดอัตโนมัติ — ระบบเช็คจากบนลงล่าง เจอ keyword แรกที่ตรงก็ใช้หมวดนั้น ลูกศรขึ้น/ลงสลับลำดับได้</div>
+  </div>
+</main>
+</body>
+</html>

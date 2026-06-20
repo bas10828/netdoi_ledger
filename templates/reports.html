@@ -30,12 +30,29 @@
   main { padding: 28px 32px; max-width: 1800px; margin: 0 auto; }
   .back-link { display: inline-flex; align-items: center; gap: 6px; margin-bottom: 18px; color: #2c70c9; text-decoration: none; font-size: 13px; font-weight: 600; }
   .back-link:hover { text-decoration: underline; }
-  .toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
+  .toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
   .toolbar label { font-size: 13px; color: #6b7785; font-weight: 600; }
   .toolbar select {
     padding: 8px 12px; border: 1px solid #e6e9ec; border-radius: 8px; font-size: 13px;
     font-family: inherit; background: white;
   }
+  .export-dropdown { position: relative; margin-left: auto; }
+  .export-dropdown .btn-export {
+    padding: 9px 18px; border: none; border-radius: 8px; font-size: 13px; font-weight: 600;
+    cursor: pointer; font-family: inherit; background: #1e8449; color: white;
+  }
+  .export-dropdown .btn-export:hover { background: #186a3a; }
+  .export-menu {
+    display: none; position: absolute; top: calc(100% + 6px); right: 0; z-index: 10;
+    background: white; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+    overflow: hidden; min-width: 120px;
+  }
+  .export-menu.open { display: block; }
+  .export-menu button {
+    display: block; width: 100%; padding: 10px 16px; border: none; background: white;
+    text-align: left; font-size: 13px; font-weight: 600; color: #1c2833; cursor: pointer; font-family: inherit;
+  }
+  .export-menu button:hover { background: #f0f2f5; }
   .chart-wrap {
     background: white; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.06);
     padding: 20px 22px; margin-bottom: 18px;
@@ -83,19 +100,48 @@
   <a class="back-link" href="/">&laquo; กลับหน้าหลัก</a>
   {% if years %}
   <div class="toolbar">
+    <label for="f-granularity">ระดับ</label>
+    <select id="f-granularity" onchange="navigateReports()">
+      <option value="year" {% if granularity == 'year' %}selected{% endif %}>ปี</option>
+      <option value="month" {% if granularity == 'month' %}selected{% endif %}>เดือน</option>
+      <option value="day" {% if granularity == 'day' %}selected{% endif %}>วัน</option>
+    </select>
     <label for="f-year">ปี</label>
-    <select id="f-year" onchange="location.href = '/reports?year=' + this.value">
+    <select id="f-year" onchange="navigateReports()">
       {% for y in years %}
       <option value="{{ y }}" {% if y == selected_year %}selected{% endif %}>{{ y }}</option>
       {% endfor %}
     </select>
+    {% if granularity in ('month', 'day') %}
+    <label for="f-month">เดือน</label>
+    <select id="f-month" onchange="navigateReports()">
+      {% for m in months %}
+      <option value="{{ m }}" {% if m == selected_month %}selected{% endif %}>{{ thai_months.get(m, m) }}</option>
+      {% endfor %}
+    </select>
+    {% endif %}
+    {% if granularity == 'day' %}
+    <label for="f-day">วัน</label>
+    <select id="f-day" onchange="navigateReports()">
+      {% for d in days %}
+      <option value="{{ d }}" {% if d == selected_day %}selected{% endif %}>{{ d }}</option>
+      {% endfor %}
+    </select>
+    {% endif %}
+    <div class="export-dropdown">
+      <button type="button" class="btn-export" onclick="toggleExportMenu()">Export รายงาน &#9662;</button>
+      <div class="export-menu" id="export-menu">
+        <button type="button" onclick="exportReport('excel')">Excel</button>
+        <button type="button" onclick="exportReport('pdf')">PDF</button>
+      </div>
+    </div>
   </div>
   {% endif %}
   {% if years %}
   <div class="cards">
-    <div class="card c-expense"><div class="label">รายจ่าย (ปี {{ selected_year }})</div><div class="value expense">{{ "%.2f"|format(total_expense) }}</div></div>
-    <div class="card c-income"><div class="label">รายรับ (ปี {{ selected_year }})</div><div class="value income">{{ "%.2f"|format(total_income) }}</div></div>
-    <div class="card c-net"><div class="label">สุทธิ (ปี {{ selected_year }})</div><div class="value net">{{ "%.2f"|format(net) }}</div></div>
+    <div class="card c-expense"><div class="label">รายจ่าย ({{ period_label }})</div><div class="value expense">{{ "%.2f"|format(total_expense) }}</div></div>
+    <div class="card c-income"><div class="label">รายรับ ({{ period_label }})</div><div class="value income">{{ "%.2f"|format(total_income) }}</div></div>
+    <div class="card c-net"><div class="label">สุทธิ ({{ period_label }})</div><div class="value net">{{ "%.2f"|format(net) }}</div></div>
   </div>
   {% endif %}
   <div class="chart-wrap">
@@ -111,7 +157,7 @@
       <canvas id="category-chart"></canvas>
     </div>
     <div class="chart-wrap payee-list">
-      <h3>Top 5 ผู้รับเงิน (ปี {{ selected_year }})</h3>
+      <h3>Top 5 ผู้รับเงิน ({{ period_label }})</h3>
       {% if top_payees %}
       {% for p in top_payees %}
       <div class="payee-row">
@@ -126,6 +172,37 @@
   </div>
   {% endif %}
 </main>
+<script>
+function currentReportParams() {
+  const granularity = document.getElementById('f-granularity').value;
+  const params = new URLSearchParams({ granularity, year: document.getElementById('f-year').value });
+  const monthEl = document.getElementById('f-month');
+  if (monthEl) params.set('month', monthEl.value);
+  const dayEl = document.getElementById('f-day');
+  if (dayEl) params.set('day', dayEl.value);
+  return params;
+}
+
+function navigateReports() {
+  location.href = '/reports?' + currentReportParams().toString();
+}
+
+function toggleExportMenu() {
+  document.getElementById('export-menu').classList.toggle('open');
+}
+
+function exportReport(kind) {
+  document.getElementById('export-menu').classList.remove('open');
+  location.href = `/reports/export/${kind}?` + currentReportParams().toString();
+}
+
+document.addEventListener('click', (e) => {
+  const dropdown = document.querySelector('.export-dropdown');
+  if (dropdown && !dropdown.contains(e.target)) {
+    document.getElementById('export-menu').classList.remove('open');
+  }
+});
+</script>
 {% if years %}
 <script>
 const monthlyData = {{ monthly_chart|safe }};
