@@ -19,8 +19,21 @@ from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, Tabl
 
 load_dotenv()
 
-FONT = "Tahoma"
-pdfmetrics.registerFont(TTFont(FONT, r"C:\Windows\Fonts\tahoma.ttf"))
+FONT = "ThaiReportFont"
+_FONT_CANDIDATES = [
+    r"C:\Windows\Fonts\tahoma.ttf",
+    "/usr/share/fonts/truetype/tlwg/Sarabun.ttf",
+    "/usr/share/fonts/truetype/thai-tlwg/Sarabun.ttf",
+    "/usr/share/fonts/truetype/noto/NotoSansThai-Regular.ttf",
+]
+_font_path = next((p for p in _FONT_CANDIDATES if os.path.exists(p)), None)
+if not _font_path:
+    raise RuntimeError(
+        "No Thai-capable TTF font found (checked: "
+        + ", ".join(_FONT_CANDIDATES)
+        + "). Install a Thai font package (e.g. fonts-thai-tlwg) on this host/container."
+    )
+pdfmetrics.registerFont(TTFont(FONT, _font_path))
 
 OUT_XLSX = "ledger_report.xlsx"
 OUT_PDF = "ledger_report.pdf"
@@ -31,6 +44,7 @@ SELECT
     txn_time AS "เวลา",
     bank AS "ธนาคาร",
     direction AS "ประเภท",
+    category AS "หมวด",
     amount AS "ยอดเงิน",
     fee AS "ค่าธรรมเนียม",
     sender_name AS "ผู้โอน",
@@ -63,7 +77,8 @@ def write_excel(df: pd.DataFrame):
     print(f"-> {OUT_XLSX}")
 
 
-def write_pdf(df: pd.DataFrame):
+def build_pdf(df: pd.DataFrame, output):
+    """Render df to a PDF. `output` is a file path (str) or a file-like object (e.g. BytesIO)."""
     styles = getSampleStyleSheet()
     h1 = ParagraphStyle("h1", parent=styles["Title"], fontName=FONT, fontSize=16, spaceAfter=10)
     body = ParagraphStyle("body", parent=styles["BodyText"], fontName=FONT, fontSize=10, leading=14)
@@ -96,16 +111,16 @@ def write_pdf(df: pd.DataFrame):
         t,
     ]
     SimpleDocTemplate(
-        OUT_PDF, pagesize=landscape(A4),
+        output, pagesize=landscape(A4),
         topMargin=1.5 * cm, bottomMargin=1.5 * cm, leftMargin=1.2 * cm, rightMargin=1.2 * cm,
     ).build(story)
-    print(f"-> {OUT_PDF}")
 
 
 def main():
     df = fetch_df()
     write_excel(df)
-    write_pdf(df)
+    build_pdf(df, OUT_PDF)
+    print(f"-> {OUT_PDF}")
 
 
 if __name__ == "__main__":

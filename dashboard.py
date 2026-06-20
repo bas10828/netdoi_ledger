@@ -262,21 +262,7 @@ def reports(request: Request, year: int = 0):
     )
 
 
-@app.get("/export/excel")
-def export_excel(
-    request: Request,
-    direction: str = "",
-    date_from: str = "",
-    date_to: str = "",
-    bank: str = "",
-    status: str = "",
-    name: str = "",
-    category: str = "",
-):
-    redirect = require_login(request)
-    if redirect:
-        return redirect
-
+def build_export_filter(direction, date_from, date_to, bank, status, name, category):
     where = []
     params = []
     if category:
@@ -306,7 +292,11 @@ def export_excel(
     if name:
         where.append("(sender_name ILIKE %s OR receiver_name ILIKE %s)")
         params.extend([f"%{name}%", f"%{name}%"])
+    return where, params
 
+
+def fetch_export_df(direction, date_from, date_to, bank, status, name, category):
+    where, params = build_export_filter(direction, date_from, date_to, bank, status, name, category)
     query = """
         SELECT
             txn_date AS "วันที่", txn_time AS "เวลา", bank AS "ธนาคาร",
@@ -321,9 +311,27 @@ def export_excel(
 
     conn = db()
     try:
-        df = pd.read_sql(query, conn, params=params)
+        return pd.read_sql(query, conn, params=params)
     finally:
         conn.close()
+
+
+@app.get("/export/excel")
+def export_excel(
+    request: Request,
+    direction: str = "",
+    date_from: str = "",
+    date_to: str = "",
+    bank: str = "",
+    status: str = "",
+    name: str = "",
+    category: str = "",
+):
+    redirect = require_login(request)
+    if redirect:
+        return redirect
+
+    df = fetch_export_df(direction, date_from, date_to, bank, status, name, category)
 
     summary = (
         df.groupby("ประเภท")["ยอดเงิน"]
@@ -343,6 +351,40 @@ def export_excel(
     return StreamingResponse(
         buf,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@app.get("/export/pdf")
+def export_pdf(
+    request: Request,
+    direction: str = "",
+    date_from: str = "",
+    date_to: str = "",
+    bank: str = "",
+    status: str = "",
+    name: str = "",
+    category: str = "",
+):
+    redirect = require_login(request)
+    if redirect:
+        return redirect
+
+    try:
+        from export_report import build_pdf
+    except RuntimeError as e:
+        raise HTTPException(500, str(e))
+
+    df = fetch_export_df(direction, date_from, date_to, bank, status, name, category)
+
+    buf = io.BytesIO()
+    build_pdf(df, buf)
+    buf.seek(0)
+
+    filename = f"ledger_{date.today().isoformat()}.pdf"
+    return StreamingResponse(
+        buf,
+        media_type="application/pdf",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 

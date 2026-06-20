@@ -26,7 +26,7 @@
   }
   header a { color: #cdd9e5; text-decoration: none; font-size: 13px; padding: 6px 12px; border-radius: 6px; transition: background .15s; }
   header a:hover { color: white; background: rgba(255,255,255,0.1); }
-  main { padding: 28px 32px; max-width: 1320px; margin: 0 auto; }
+  main { padding: 28px 32px; max-width: 1800px; margin: 0 auto; }
   .cards { display: flex; flex-wrap: wrap; gap: 16px; margin-bottom: 24px; }
   .card {
     flex: 1 1 200px;
@@ -132,6 +132,18 @@
   .filter-bar .btn-clear:hover { background: #e6e9ec; }
   .filter-bar .btn-export { background: #1e8449; color: white; }
   .filter-bar .btn-export:hover { background: #186a3a; }
+  .export-dropdown { position: relative; }
+  .export-menu {
+    display: none; position: absolute; top: calc(100% + 6px); right: 0; z-index: 10;
+    background: white; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+    overflow: hidden; min-width: 120px;
+  }
+  .export-menu.open { display: block; }
+  .export-menu button {
+    display: block; width: 100%; padding: 10px 16px; border: none; background: white;
+    text-align: left; font-size: 13px; font-weight: 600; color: #1c2833; cursor: pointer; font-family: inherit;
+  }
+  .export-menu button:hover { background: #f0f2f5; }
   tr.hidden-row { display: none; }
   tr.page-hidden { display: none; }
   .pagination {
@@ -258,7 +270,13 @@
     <div class="actions-row">
       <button type="button" class="btn-apply" onclick="applyFilters()">filter</button>
       <button type="button" class="btn-clear" onclick="clearFilters()">ล้าง</button>
-      <button type="button" class="btn-export" onclick="exportExcel()">Export Excel</button>
+      <div class="export-dropdown">
+        <button type="button" class="btn-export" onclick="toggleExportMenu()">Export &#9662;</button>
+        <div class="export-menu" id="export-menu">
+          <button type="button" onclick="exportExcel()">Excel</button>
+          <button type="button" onclick="exportPdf()">PDF</button>
+        </div>
+      </div>
     </div>
   </div>
   <div class="table-wrap">
@@ -434,8 +452,8 @@ function clearFilters() {
   renderTable();
 }
 
-function exportExcel() {
-  const params = new URLSearchParams({
+function exportParams() {
+  return new URLSearchParams({
     direction: document.getElementById('f-direction').value,
     date_from: document.getElementById('f-date-from').value,
     date_to: document.getElementById('f-date-to').value,
@@ -444,27 +462,30 @@ function exportExcel() {
     name: document.getElementById('f-name').value.trim(),
     category: document.getElementById('f-category').value,
   });
-  window.location.href = '/export/excel?' + params.toString();
 }
 
-renderTable();
+function toggleExportMenu() {
+  document.getElementById('export-menu').classList.toggle('open');
+}
 
-const monthlyData = {{ monthly_chart|safe }};
-new Chart(document.getElementById('monthly-chart'), {
-  type: 'bar',
-  data: {
-    labels: monthlyData.labels,
-    datasets: [
-      { label: 'รายรับ', data: monthlyData.income, backgroundColor: '#1e8449' },
-      { label: 'รายจ่าย', data: monthlyData.expense, backgroundColor: '#c0392b' },
-    ],
-  },
-  options: {
-    responsive: true,
-    plugins: { legend: { position: 'top' } },
-    scales: { y: { beginAtZero: true } },
-  },
+function exportExcel() {
+  document.getElementById('export-menu').classList.remove('open');
+  window.location.href = '/export/excel?' + exportParams().toString();
+}
+
+function exportPdf() {
+  document.getElementById('export-menu').classList.remove('open');
+  window.location.href = '/export/pdf?' + exportParams().toString();
+}
+
+document.addEventListener('click', (e) => {
+  const dropdown = document.querySelector('.export-dropdown');
+  if (dropdown && !dropdown.contains(e.target)) {
+    document.getElementById('export-menu').classList.remove('open');
+  }
 });
+
+renderTable();
 </script>
 </body>
 </html>
