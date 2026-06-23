@@ -59,6 +59,10 @@
   }
   .chart-row { display: flex; flex-wrap: wrap; gap: 18px; align-items: flex-start; }
   .chart-row .chart-wrap { flex: 1 1 320px; margin-bottom: 0; }
+  .chart-row .chart-wrap.chart-canvas-wrap { height: 320px; }
+  @media (max-width: 600px) {
+    .chart-row .chart-wrap.chart-canvas-wrap { height: 260px; }
+  }
   .cards { display: flex; flex-wrap: wrap; gap: 16px; margin-bottom: 18px; }
   .card {
     flex: 1 1 200px; background: white; border-radius: 12px; padding: 18px 20px;
@@ -153,7 +157,7 @@
   </div>
   {% if years %}
   <div class="chart-row">
-    <div class="chart-wrap">
+    <div class="chart-wrap chart-canvas-wrap">
       <canvas id="category-chart"></canvas>
     </div>
     <div class="chart-wrap payee-list">
@@ -223,6 +227,7 @@ new Chart(document.getElementById('monthly-chart'), {
 });
 
 const categoryData = {{ category_chart|safe }};
+const isMobile = window.matchMedia('(max-width: 600px)').matches;
 new Chart(document.getElementById('category-chart'), {
   type: 'pie',
   data: {
@@ -234,7 +239,14 @@ new Chart(document.getElementById('category-chart'), {
   },
   options: {
     responsive: true,
-    plugins: { legend: { position: 'right' }, title: { display: true, text: 'รายจ่ายตามหมวด' } },
+    maintainAspectRatio: false,
+    plugins: {
+      legend: {
+        position: isMobile ? 'bottom' : 'right',
+        labels: { boxWidth: isMobile ? 10 : 14, font: { size: isMobile ? 10 : 12 } },
+      },
+      title: { display: true, text: 'รายจ่ายตามหมวด' },
+    },
   },
 });
 </script>

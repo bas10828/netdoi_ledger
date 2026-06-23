@@ -23,7 +23,10 @@ from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, RedirectResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
 from linebot.v3.messaging import ApiClient, Configuration, MessagingApi
-from openpyxl.chart import BarChart, PieChart, Reference
+from openpyxl.chart import BarChart, Reference
+from openpyxl.chart.label import DataLabelList
+from openpyxl.utils import get_column_letter
+from openpyxl.worksheet.table import Table, TableStyleInfo
 from starlette.middleware.sessions import SessionMiddleware
 
 from categorize import get_categories, guess_category
@@ -393,6 +396,31 @@ def reports(request: Request, granularity: str = "month", year: int = 0, month: 
     )
 
 
+COLOR_EXPENSE = "C0392B"
+COLOR_INCOME = "1E8449"
+
+
+def _style_table_sheet(ws, df, table_name, currency_cols):
+    """Turn a freshly-written df sheet into a banded Excel Table with sane column widths and number formats."""
+    n_rows, n_cols = df.shape
+    last_row = n_rows + 1
+    ref = f"A1:{get_column_letter(n_cols)}{last_row}"
+    table = Table(displayName=table_name, ref=ref)
+    table.tableStyleInfo = TableStyleInfo(
+        name="TableStyleMedium9", showRowStripes=True, showFirstColumn=False, showLastColumn=False,
+    )
+    ws.add_table(table)
+
+    for col_name in currency_cols:
+        col_letter = get_column_letter(df.columns.get_loc(col_name) + 1)
+        for r in range(2, last_row + 1):
+            ws[f"{col_letter}{r}"].number_format = "#,##0.00"
+
+    for i, col_name in enumerate(df.columns, start=1):
+        max_len = max([len(str(col_name))] + [len(str(v)) for v in df[col_name].astype(str)])
+        ws.column_dimensions[get_column_letter(i)].width = min(max(max_len + 2, 10), 45)
+
+
 @app.get("/reports/export/excel")
 def reports_export_excel(request: Request, granularity: str = "year", year: int = 0, month: int = 0, day: int = 0):
     redirect = require_login(request)
@@ -437,24 +465,48 @@ def reports_export_excel(request: Request, granularity: str = "year", year: int 
         payee_df.to_excel(writer, sheet_name="Top ผู้รับเงิน", index=False)
         bucket_df.to_excel(writer, sheet_name="กราฟ", index=False)
 
+        _style_table_sheet(writer.sheets["สรุป"], summary_df, "tbl_summary", ["ค่า"])
+        _style_table_sheet(writer.sheets["ตามหมวด"], category_df, "tbl_category", ["ยอด (บาท)"])
+        _style_table_sheet(writer.sheets["Top ผู้รับเงิน"], payee_df, "tbl_payee", ["ยอด (บาท)"])
+        _style_table_sheet(writer.sheets["กราฟ"], bucket_df, "tbl_bucket", ["รายจ่าย", "รายรับ"])
+
         if len(bucket_df):
             bar = BarChart()
+            bar.type = "col"
             bar.title = "รายรับ-รายจ่ายตามช่วงเวลา"
             bar.y_axis.title = "บาท"
+            bar.y_axis.numFmt = "#,##0"
+            bar.width, bar.height = 24, 12
+            bar.gapWidth = 50
             ws = writer.sheets["กราฟ"]
             n = len(bucket_df) + 1
             bar.add_data(Reference(ws, min_col=2, max_col=3, min_row=1, max_row=n), titles_from_data=True)
             bar.set_categories(Reference(ws, min_col=1, min_row=2, max_row=n))
-            ws.add_chart(bar, "E2")
+            bar.series[0].graphicalProperties.solidFill = COLOR_EXPENSE
+            bar.series[1].graphicalProperties.solidFill = COLOR_INCOME
+            bar.dataLabels = DataLabelList()
+            bar.dataLabels.showVal = True
+            ws.add_chart(bar, f"{get_column_letter(bucket_df.shape[1] + 2)}2")
 
         if len(category_df):
-            pie = PieChart()
-            pie.title = "แยกตามหมวด"
+            # category_rows already comes from SQL ORDER BY total DESC; horizontal bar
+            # reads top-to-bottom in that same order once the category axis is reversed.
+            cat_bar = BarChart()
+            cat_bar.type = "bar"
+            cat_bar.title = "รายจ่ายตามหมวด"
+            cat_bar.y_axis.numFmt = "#,##0"
+            cat_bar.x_axis.scaling.orientation = "maxMin"
+            cat_bar.width, cat_bar.height = 22, max(10, 2 * len(category_df))
+            cat_bar.gapWidth = 60
+            cat_bar.legend = None
             ws2 = writer.sheets["ตามหมวด"]
             n2 = len(category_df) + 1
-            pie.add_data(Reference(ws2, min_col=2, min_row=1, max_row=n2), titles_from_data=True)
-            pie.set_categories(Reference(ws2, min_col=1, min_row=2, max_row=n2))
-            ws2.add_chart(pie, "D2")
+            cat_bar.add_data(Reference(ws2, min_col=2, min_row=1, max_row=n2), titles_from_data=True)
+            cat_bar.set_categories(Reference(ws2, min_col=1, min_row=2, max_row=n2))
+            cat_bar.series[0].graphicalProperties.solidFill = COLOR_EXPENSE
+            cat_bar.dataLabels = DataLabelList()
+            cat_bar.dataLabels.showVal = True
+            ws2.add_chart(cat_bar, f"{get_column_letter(category_df.shape[1] + 2)}2")
     buf.seek(0)
 
     filename = f"report_summary_{date.today().isoformat()}.xlsx"
