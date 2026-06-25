@@ -4,6 +4,7 @@ Run: python export_report.py
 Output: ledger_report.xlsx, ledger_report.pdf
 """
 
+import glob
 import os
 
 import pandas as pd
@@ -34,11 +35,20 @@ _FONT_CANDIDATES = [
     "/usr/share/fonts/truetype/thai-tlwg/Sarabun.ttf",
     "/usr/share/fonts/truetype/noto/NotoSansThai-Regular.ttf",
 ]
+_FONT_GLOBS = [
+    "/usr/share/fonts/**/*Sarabun*.ttf",
+    "/usr/share/fonts/**/*NotoSansThai*.ttf",
+    "/usr/share/fonts/**/*thai*.ttf",
+]
 _font_path = next((p for p in _FONT_CANDIDATES if os.path.exists(p)), None)
+if not _font_path:
+    _font_path = next(
+        (p for pattern in _FONT_GLOBS for p in glob.glob(pattern, recursive=True)), None
+    )
 if not _font_path:
     raise RuntimeError(
         "No Thai-capable TTF font found (checked: "
-        + ", ".join(_FONT_CANDIDATES)
+        + ", ".join(_FONT_CANDIDATES + _FONT_GLOBS)
         + "). Install a Thai font package (e.g. fonts-thai-tlwg) on this host/container."
     )
 pdfmetrics.registerFont(TTFont(FONT, _font_path))

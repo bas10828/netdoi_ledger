@@ -117,24 +117,42 @@
     background: white; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.06);
     padding: 16px 18px; margin-bottom: 16px;
   }
-  .filter-bar .field { display: flex; flex-direction: column; gap: 5px; }
-  .filter-bar label { font-size: 11px; color: #97a3ad; font-weight: 600; }
-  .filter-bar input, .filter-bar select {
+  .filter-bar .field, .filter-more .field { display: flex; flex-direction: column; gap: 5px; }
+  .filter-bar label, .filter-more label { font-size: 11px; color: #97a3ad; font-weight: 600; }
+  .filter-bar input, .filter-bar select, .filter-more input, .filter-more select {
     padding: 8px 10px; border: 1px solid #e6e9ec; border-radius: 8px; font-size: 13px;
     font-family: inherit; min-width: 110px; background: #fafbfc;
   }
-  .filter-bar input:focus, .filter-bar select:focus { outline: none; border-color: #2c70c9; background: white; }
+  .filter-bar input:focus, .filter-bar select:focus,
+  .filter-more input:focus, .filter-more select:focus { outline: none; border-color: #2c70c9; background: white; }
+  .filter-bar .range-group, .filter-more .range-group { display: flex; align-items: center; gap: 6px; }
+  .filter-bar .range-group input, .filter-more .range-group input { min-width: 90px; width: 110px; }
+  .filter-bar .range-sep, .filter-more .range-sep { color: #c2cad2; font-size: 13px; }
   .filter-bar .actions-row { display: flex; gap: 8px; margin-left: auto; align-self: end; }
   .filter-bar button {
     padding: 9px 18px; border: none; border-radius: 8px; font-size: 13px; font-weight: 600;
     cursor: pointer; font-family: inherit;
   }
-  .filter-bar .btn-apply { background: #2c70c9; color: white; }
-  .filter-bar .btn-apply:hover { background: #235ba3; }
   .filter-bar .btn-clear { background: #f2f4f6; color: #6b7785; }
   .filter-bar .btn-clear:hover { background: #e6e9ec; }
   .filter-bar .btn-export { background: #1e8449; color: white; }
   .filter-bar .btn-export:hover { background: #186a3a; }
+  .btn-more {
+    padding: 9px 14px; border: 1px solid #e6e9ec; border-radius: 8px; font-size: 13px;
+    font-weight: 600; cursor: pointer; font-family: inherit; background: #fafbfc; color: #6b7785;
+    align-self: end;
+  }
+  .btn-more:hover { background: #f0f2f5; }
+  .btn-more .more-count {
+    display: inline-block; background: #2c70c9; color: white; font-size: 11px; font-weight: 700;
+    border-radius: 10px; padding: 0 6px; margin-left: 4px;
+  }
+  .filter-more {
+    display: none; flex-wrap: wrap; gap: 14px 18px; align-items: end;
+    background: white; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.06);
+    padding: 16px 18px; margin: -10px 0 16px;
+  }
+  .filter-more.open { display: flex; }
   .export-dropdown { position: relative; }
   .export-menu {
     display: none; position: absolute; top: calc(100% + 6px); right: 0; z-index: 10;
@@ -169,10 +187,14 @@
     main { padding: 16px; }
     .card { flex-basis: 140px; }
     .card .value { font-size: 20px; }
-    .filter-bar { padding: 12px; }
-    .filter-bar .field, .filter-bar input, .filter-bar select { width: 100%; }
+    .filter-bar, .filter-more { padding: 12px; }
+    .filter-bar .field, .filter-bar input, .filter-bar select,
+    .filter-more .field, .filter-more input, .filter-more select { width: 100%; }
+    .filter-bar .range-group, .filter-more .range-group { width: 100%; }
+    .filter-bar .range-group input, .filter-more .range-group input { width: 100%; min-width: 0; }
     .filter-bar .actions-row { margin-left: 0; width: 100%; }
     .filter-bar .actions-row button { flex: 1; }
+    .btn-more { width: 100%; }
     th, td { padding: 9px 10px; font-size: 12px; }
     .add-btn.chat-btn { margin-left: 0; }
     .add-btn.report-btn { margin-right: 0; }
@@ -233,12 +255,39 @@
       </select>
     </div>
     <div class="field">
-      <label>ตั้งแต่วันที่</label>
-      <input type="date" id="f-date-from">
+      <label>ช่วงวันที่</label>
+      <div class="range-group">
+        <input type="date" id="f-date-from">
+        <span class="range-sep">–</span>
+        <input type="date" id="f-date-to">
+      </div>
     </div>
     <div class="field">
-      <label>ถึงวันที่</label>
-      <input type="date" id="f-date-to">
+      <label>ผู้โอน/ผู้รับ</label>
+      <input type="text" id="f-name" placeholder="ค้นหาชื่อ...">
+    </div>
+    <button type="button" class="btn-more" id="more-toggle" onclick="toggleMoreFilters()">
+      ตัวกรองเพิ่มเติม<span class="more-count" id="more-count" style="display:none"></span> &#9662;
+    </button>
+    <div class="actions-row">
+      <button type="button" class="btn-clear" onclick="clearFilters()">ล้าง</button>
+      <div class="export-dropdown">
+        <button type="button" class="btn-export" onclick="toggleExportMenu()">Export &#9662;</button>
+        <div class="export-menu" id="export-menu">
+          <button type="button" onclick="exportExcel()">Excel</button>
+          <button type="button" onclick="exportPdf()">PDF</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="filter-more" id="filter-more">
+    <div class="field">
+      <label>ช่วงยอด (บาท)</label>
+      <div class="range-group">
+        <input type="number" id="f-amount-min" placeholder="ต่ำสุด" step="0.01" min="0">
+        <span class="range-sep">–</span>
+        <input type="number" id="f-amount-max" placeholder="สูงสุด" step="0.01" min="0">
+      </div>
     </div>
     <div class="field">
       <label>ธนาคาร</label>
@@ -259,10 +308,6 @@
       </select>
     </div>
     <div class="field">
-      <label>ผู้โอน/ผู้รับ</label>
-      <input type="text" id="f-name" placeholder="ค้นหาชื่อ...">
-    </div>
-    <div class="field">
       <label>หมวด</label>
       <select id="f-category">
         <option value="">ทั้งหมด</option>
@@ -270,17 +315,6 @@
         <option value="{{ c }}">{{ c }}</option>
         {% endfor %}
       </select>
-    </div>
-    <div class="actions-row">
-      <button type="button" class="btn-apply" onclick="applyFilters()">filter</button>
-      <button type="button" class="btn-clear" onclick="clearFilters()">ล้าง</button>
-      <div class="export-dropdown">
-        <button type="button" class="btn-export" onclick="toggleExportMenu()">Export &#9662;</button>
-        <div class="export-menu" id="export-menu">
-          <button type="button" onclick="exportExcel()">Excel</button>
-          <button type="button" onclick="exportPdf()">PDF</button>
-        </div>
-      </div>
     </div>
   </div>
   <div class="table-wrap">
@@ -310,6 +344,7 @@
         data-direction="{{ r.direction }}" data-date="{{ r.txn_date }}" data-bank="{{ r.bank or '' }}"
         data-verified="{{ '1' if r.verified_bank else '0' }}" data-dup="{{ '1' if dup_color.get(r.id) else '0' }}"
         data-category="{{ r.category or '' }}" data-qr="{{ r.qr_trans_ref or r.printed_ref or '' }}"
+        data-amount="{{ r.amount }}"
         data-name="{{ (r.sender_name or '') ~ ' ' ~ (r.receiver_name or '') }}">
       <td>{% if r.raw_file_id %}<a href="/files/{{ r.raw_file_id }}" target="_blank"><img class="thumb" src="/files/{{ r.raw_file_id }}"></a>{% else %}-{% endif %}</td>
       <td>{{ r.txn_date }}</td>
@@ -446,10 +481,14 @@ function rowMatchesFilters(row) {
   const status = document.getElementById('f-status').value;
   const name = document.getElementById('f-name').value.trim().toLowerCase();
   const category = document.getElementById('f-category').value;
+  const amountMin = document.getElementById('f-amount-min').value;
+  const amountMax = document.getElementById('f-amount-max').value;
 
   if (direction && !direction.split(',').includes(row.dataset.direction)) return false;
   if (dateFrom && row.dataset.date < dateFrom) return false;
   if (dateTo && row.dataset.date > dateTo) return false;
+  if (amountMin && parseFloat(row.dataset.amount) < parseFloat(amountMin)) return false;
+  if (amountMax && parseFloat(row.dataset.amount) > parseFloat(amountMax)) return false;
   if (bank && row.dataset.bank !== bank) return false;
   if (status === 'verified' && row.dataset.verified !== '1') return false;
   if (status === 'unverified' && row.dataset.verified !== '0') return false;
@@ -494,22 +533,38 @@ function gotoPage(page) {
 function applyFilters() {
   currentPage = 0;
   renderTable();
+  updateMoreCount();
 }
 
 function clearFilters() {
   document.getElementById('f-direction').value = '';
   document.getElementById('f-date-from').value = '';
   document.getElementById('f-date-to').value = '';
+  document.getElementById('f-amount-min').value = '';
+  document.getElementById('f-amount-max').value = '';
   document.getElementById('f-bank').value = '';
   document.getElementById('f-status').value = '';
   document.getElementById('f-name').value = '';
   document.getElementById('f-category').value = '';
   currentPage = 0;
   renderTable();
+  updateMoreCount();
+}
+
+function toggleMoreFilters() {
+  document.getElementById('filter-more').classList.toggle('open');
+}
+
+function updateMoreCount() {
+  const ids = ['f-amount-min', 'f-amount-max', 'f-bank', 'f-status', 'f-category'];
+  const count = ids.filter(id => document.getElementById(id).value).length;
+  const el = document.getElementById('more-count');
+  el.textContent = count || '';
+  el.style.display = count ? 'inline-block' : 'none';
 }
 
 function exportParams() {
-  return new URLSearchParams({
+  const params = {
     direction: document.getElementById('f-direction').value,
     date_from: document.getElementById('f-date-from').value,
     date_to: document.getElementById('f-date-to').value,
@@ -517,7 +572,12 @@ function exportParams() {
     status: document.getElementById('f-status').value,
     name: document.getElementById('f-name').value.trim(),
     category: document.getElementById('f-category').value,
-  });
+  };
+  const amountMin = document.getElementById('f-amount-min').value;
+  const amountMax = document.getElementById('f-amount-max').value;
+  if (amountMin) params.amount_min = amountMin;
+  if (amountMax) params.amount_max = amountMax;
+  return new URLSearchParams(params);
 }
 
 function toggleExportMenu() {
@@ -541,7 +601,18 @@ document.addEventListener('click', (e) => {
   }
 });
 
+['f-direction', 'f-date-from', 'f-date-to', 'f-amount-min', 'f-amount-max',
+ 'f-bank', 'f-status', 'f-category'].forEach(id => {
+  document.getElementById(id).addEventListener('change', applyFilters);
+});
+let nameFilterTimer = null;
+document.getElementById('f-name').addEventListener('input', () => {
+  clearTimeout(nameFilterTimer);
+  nameFilterTimer = setTimeout(applyFilters, 250);
+});
+
 renderTable();
+updateMoreCount();
 </script>
 </body>
 </html>

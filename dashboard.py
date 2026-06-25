@@ -182,8 +182,9 @@ def dashboard(request: Request):
 
     groups = defaultdict(list)
     for r in rows:
-        if r["qr_trans_ref"]:
-            groups[r["qr_trans_ref"]].append(r)
+        dup_key = r["qr_trans_ref"] or r["printed_ref"]
+        if dup_key:
+            groups[dup_key].append(r)
     dup_color = {}
     dup_extra_ids = set()
     palette = ["dup-1", "dup-2", "dup-3", "dup-4", "dup-5"]
@@ -550,7 +551,8 @@ def reports_export_pdf(request: Request, granularity: str = "year", year: int = 
     )
 
 
-def build_export_filter(direction, date_from, date_to, bank, status, name, category):
+def build_export_filter(direction, date_from, date_to, bank, status, name, category,
+                         amount_min=None, amount_max=None):
     where = []
     params = []
     if category:
@@ -565,6 +567,12 @@ def build_export_filter(direction, date_from, date_to, bank, status, name, categ
     if date_to:
         where.append("txn_date <= %s")
         params.append(date_to)
+    if amount_min is not None:
+        where.append("amount >= %s")
+        params.append(amount_min)
+    if amount_max is not None:
+        where.append("amount <= %s")
+        params.append(amount_max)
     if bank:
         where.append("bank = %s")
         params.append(bank)
@@ -573,9 +581,10 @@ def build_export_filter(direction, date_from, date_to, bank, status, name, categ
     elif status == "unverified":
         where.append("verified_bank = false")
     elif status == "dup":
-        where.append("""qr_trans_ref IN (
-            SELECT qr_trans_ref FROM slip_transactions
-            WHERE qr_trans_ref IS NOT NULL GROUP BY qr_trans_ref HAVING COUNT(*) > 1
+        where.append("""COALESCE(qr_trans_ref, NULLIF(printed_ref, '')) IN (
+            SELECT COALESCE(qr_trans_ref, NULLIF(printed_ref, '')) FROM slip_transactions
+            WHERE COALESCE(qr_trans_ref, NULLIF(printed_ref, '')) IS NOT NULL
+            GROUP BY COALESCE(qr_trans_ref, NULLIF(printed_ref, '')) HAVING COUNT(*) > 1
         )""")
     if name:
         where.append("(sender_name ILIKE %s OR receiver_name ILIKE %s)")
@@ -583,8 +592,10 @@ def build_export_filter(direction, date_from, date_to, bank, status, name, categ
     return where, params
 
 
-def fetch_export_df(direction, date_from, date_to, bank, status, name, category, columns="full"):
-    where, params = build_export_filter(direction, date_from, date_to, bank, status, name, category)
+def fetch_export_df(direction, date_from, date_to, bank, status, name, category,
+                     amount_min=None, amount_max=None, columns="full"):
+    where, params = build_export_filter(direction, date_from, date_to, bank, status, name, category,
+                                         amount_min, amount_max)
     if columns == "print":
         select = """
             txn_date AS "วันที่", txn_time AS "เวลา", bank AS "ธนาคาร",
@@ -620,12 +631,15 @@ def export_excel(
     status: str = "",
     name: str = "",
     category: str = "",
+    amount_min: float | None = None,
+    amount_max: float | None = None,
 ):
     redirect = require_login(request)
     if redirect:
         return redirect
 
-    df = fetch_export_df(direction, date_from, date_to, bank, status, name, category)
+    df = fetch_export_df(direction, date_from, date_to, bank, status, name, category,
+                          amount_min, amount_max)
 
     summary = (
         df.groupby("ประเภท")["ยอดเงิน"]
@@ -659,6 +673,8 @@ def export_pdf(
     status: str = "",
     name: str = "",
     category: str = "",
+    amount_min: float | None = None,
+    amount_max: float | None = None,
 ):
     redirect = require_login(request)
     if redirect:
@@ -669,7 +685,8 @@ def export_pdf(
     except RuntimeError as e:
         raise HTTPException(500, str(e))
 
-    df = fetch_export_df(direction, date_from, date_to, bank, status, name, category, columns="print")
+    df = fetch_export_df(direction, date_from, date_to, bank, status, name, category,
+                          amount_min, amount_max, columns="print")
 
     buf = io.BytesIO()
     build_pdf(df, buf)

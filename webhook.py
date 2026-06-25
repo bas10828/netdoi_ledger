@@ -21,7 +21,14 @@ from dotenv import load_dotenv
 from categorize import get_categories, guess_category
 from fastapi import FastAPI, Header, HTTPException, Request
 from linebot.v3.exceptions import InvalidSignatureError
-from linebot.v3.messaging import ApiClient, Configuration, MessagingApiBlob
+from linebot.v3.messaging import (
+    ApiClient,
+    Configuration,
+    MessagingApi,
+    MessagingApiBlob,
+    ReplyMessageRequest,
+    TextMessage,
+)
 from linebot.v3.webhook import WebhookParser
 from linebot.v3.webhooks import (
     FileMessageContent,
@@ -104,7 +111,9 @@ def handle_file(event: MessageEvent):
 
     if is_image:
         try:
-            extract_and_store(local_path, raw_file_id)
+            duplicate_ref = extract_and_store(local_path, raw_file_id)
+            if duplicate_ref:
+                reply_text(event.reply_token, f"สลิปนี้บันทึกไว้แล้ว (ref {duplicate_ref})")
         except Exception:
             log.exception("extract failed for %s", local_path)
 
@@ -127,8 +136,50 @@ def handle_text(event: MessageEvent):
     log.info("backed up text message %s", msg.id)
 
 
+def find_duplicate_ref(cur, ref_qr, printed_ref=None):
+    """Look up an existing slip by QR ref and/or printed ref. Returns the matching ref, or None.
+
+    Empty/blank refs are treated as "no ref" so they never match each other.
+    """
+    ref_qr = ref_qr or None
+    printed_ref = printed_ref or None
+    if ref_qr is None and printed_ref is None:
+        return None
+    cur.execute(
+        "SELECT qr_trans_ref, printed_ref FROM slip_transactions WHERE qr_trans_ref = %s OR printed_ref = %s LIMIT 1",
+        (ref_qr, printed_ref),
+    )
+    row = cur.fetchone()
+    if row is None:
+        return None
+    return row[0] or row[1]
+
+
+def reply_text(reply_token, text):
+    if not reply_token or not ACCESS_TOKEN:
+        return
+    config = Configuration(access_token=ACCESS_TOKEN)
+    with ApiClient(config) as api_client:
+        MessagingApi(api_client).reply_message(
+            ReplyMessageRequest(reply_token=reply_token, messages=[TextMessage(text=text)])
+        )
+
+
 def extract_and_store(path: Path, raw_file_id: int):
+    """Returns the duplicate ref if this slip was already stored, else None."""
     ref_qr, _bank_code = decode_qr(str(path))
+
+    if ref_qr:
+        conn = db()
+        try:
+            with conn, conn.cursor() as cur:
+                dup = find_duplicate_ref(cur, ref_qr)
+        finally:
+            conn.close()
+        if dup:
+            log.info("skip duplicate slip (qr_trans_ref=%s)", ref_qr)
+            return dup
+
     s, usage = extract_slip(claude, str(path))
     dirn = direction(s.sender_name + s.sender_account, s.receiver_name + s.receiver_account)
     cost_usd = compute_cost(MODEL, usage.input_tokens, usage.output_tokens)
@@ -136,6 +187,18 @@ def extract_and_store(path: Path, raw_file_id: int):
     conn = db()
     try:
         with conn, conn.cursor() as cur:
+            cur.execute(
+                """INSERT INTO ai_usage_log (model, input_tokens, output_tokens, cost_usd)
+                   VALUES (%s, %s, %s, %s)""",
+                (MODEL, usage.input_tokens, usage.output_tokens, cost_usd),
+            )
+
+            dup = find_duplicate_ref(cur, ref_qr, s.printed_ref)
+            if dup:
+                cur.execute("UPDATE raw_files SET processed = true WHERE id = %s", (raw_file_id,))
+                log.info("skip duplicate slip (ref=%s)", dup)
+                return dup
+
             category = guess_category(s.memo, get_categories(cur))
             cur.execute(
                 """INSERT INTO slip_transactions
@@ -147,15 +210,11 @@ def extract_and_store(path: Path, raw_file_id: int):
                  category, MODEL),
             )
             cur.execute("UPDATE raw_files SET processed = true WHERE id = %s", (raw_file_id,))
-            cur.execute(
-                """INSERT INTO ai_usage_log (model, input_tokens, output_tokens, cost_usd)
-                   VALUES (%s, %s, %s, %s)""",
-                (MODEL, usage.input_tokens, usage.output_tokens, cost_usd),
-            )
     finally:
         conn.close()
 
     log.info("slip stored: %s %.2f %s", s.bank, s.amount, s.memo)
+    return None
 
 
 if __name__ == "__main__":
