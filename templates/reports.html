@@ -132,6 +132,9 @@
       {% endfor %}
     </select>
     {% endif %}
+    <button type="button" class="btn-export" onclick="toggleCustomRange()" id="custom-toggle-btn">
+      {{ "ยกเลิกกำหนดเอง" if custom_mode else "กำหนดเอง" }}
+    </button>
     <div class="export-dropdown">
       <button type="button" class="btn-export" onclick="toggleExportMenu()">Export รายงาน &#9662;</button>
       <div class="export-menu" id="export-menu">
@@ -139,6 +142,13 @@
         <button type="button" onclick="exportReport('pdf')">PDF</button>
       </div>
     </div>
+  </div>
+  <div class="toolbar" id="custom-range-panel" style="{{ '' if custom_mode else 'display:none;' }}">
+    <label for="f-date-from">ตั้งแต่</label>
+    <input type="date" id="f-date-from" value="{{ date_from }}">
+    <label for="f-date-to">ถึง</label>
+    <input type="date" id="f-date-to" value="{{ date_to }}">
+    <button type="button" class="btn-export" onclick="applyCustomRange()">ดู</button>
   </div>
   {% endif %}
   {% if years %}
@@ -174,10 +184,28 @@
       {% endif %}
     </div>
   </div>
+  <div class="chart-row">
+    <div class="chart-wrap chart-canvas-wrap" id="drilldown-wrap">
+      <div class="toolbar" style="margin-bottom: 10px;">
+        <label for="f-drilldown-group">ดูรายละเอียดกลุ่ม</label>
+        <select id="f-drilldown-group" onchange="renderDrilldown()"></select>
+      </div>
+      <canvas id="drilldown-chart"></canvas>
+      <div class="empty" id="drilldown-empty" style="display:none;">ไม่มีกลุ่มที่แยกย่อย</div>
+    </div>
+  </div>
   {% endif %}
 </main>
 <script>
+let customActive = {{ 'true' if custom_mode else 'false' }};
+
 function currentReportParams() {
+  if (customActive) {
+    const params = new URLSearchParams();
+    params.set('date_from', document.getElementById('f-date-from').value);
+    params.set('date_to', document.getElementById('f-date-to').value);
+    return params;
+  }
   const granularity = document.getElementById('f-granularity').value;
   const params = new URLSearchParams({ granularity, year: document.getElementById('f-year').value });
   const monthEl = document.getElementById('f-month');
@@ -188,6 +216,21 @@ function currentReportParams() {
 }
 
 function navigateReports() {
+  customActive = false;
+  location.href = '/reports?' + currentReportParams().toString();
+}
+
+function toggleCustomRange() {
+  const panel = document.getElementById('custom-range-panel');
+  const open = panel.style.display !== 'none';
+  panel.style.display = open ? 'none' : 'flex';
+}
+
+function applyCustomRange() {
+  const from = document.getElementById('f-date-from').value;
+  const to = document.getElementById('f-date-to').value;
+  if (!from || !to) return;
+  customActive = true;
   location.href = '/reports?' + currentReportParams().toString();
 }
 
@@ -227,28 +270,137 @@ new Chart(document.getElementById('monthly-chart'), {
 });
 
 const categoryData = {{ category_chart|safe }};
+const categoryGroups = {{ category_groups|safe }};
 const isMobile = window.matchMedia('(max-width: 600px)').matches;
-new Chart(document.getElementById('category-chart'), {
+// Fixed-order categorical palette (references/palette.md) — never cycled. A 9th+
+// series folds into "อื่นๆ (รวม)" instead of repeating a hue.
+const PIE_COLORS = ['#2a78d6', '#1baf7a', '#eda100', '#008300', '#4a3aa7', '#e34948', '#e87ba4', '#eb6834'];
+
+function foldToTop(labels, amounts, max = PIE_COLORS.length) {
+  const idx = labels.map((_, i) => i).sort((a, b) => amounts[b] - amounts[a]);
+  if (idx.length <= max) {
+    return { labels: idx.map(i => labels[i]), amounts: idx.map(i => amounts[i]), otherLabel: null, otherMembers: null };
+  }
+  const topIdx = idx.slice(0, max - 1);
+  const restIdx = idx.slice(max - 1);
+  const restTotal = restIdx.reduce((sum, i) => sum + amounts[i], 0);
+  const otherLabel = `อื่นๆ (รวม ${restIdx.length} กลุ่ม)`;
+  return {
+    labels: [...topIdx.map(i => labels[i]), otherLabel],
+    amounts: [...topIdx.map(i => amounts[i]), restTotal],
+    otherLabel,
+    otherMembers: restIdx.map(i => ({ name: labels[i], amount: amounts[i] })).sort((a, b) => b.amount - a.amount),
+  };
+}
+
+function tooltipLabelWithFold(folded) {
+  return (ctx) => {
+    const line = `${ctx.label}: ${ctx.formattedValue}`;
+    if (ctx.label === folded.otherLabel && folded.otherMembers) {
+      return [line, ...folded.otherMembers.map(m => `  · ${m.name}: ${m.amount.toFixed(2)}`)];
+    }
+    return line;
+  };
+}
+
+const groupTotals = {};
+const groupMembers = {};
+categoryData.labels.forEach((label, i) => {
+  const amount = categoryData.amounts[i];
+  const group = categoryGroups[label] || label;
+  groupTotals[group] = (groupTotals[group] || 0) + amount;
+  if (!groupMembers[group]) groupMembers[group] = [];
+  groupMembers[group].push({ name: label, amount });
+});
+const groupLabels = Object.keys(groupTotals);
+const foldedMain = foldToTop(groupLabels, groupLabels.map(g => groupTotals[g]));
+if (foldedMain.otherMembers) {
+  groupMembers[foldedMain.otherLabel] = foldedMain.otherMembers;
+}
+
+const mainChart = new Chart(document.getElementById('category-chart'), {
   type: 'pie',
   data: {
-    labels: categoryData.labels,
+    labels: foldedMain.labels,
     datasets: [{
-      data: categoryData.amounts,
-      backgroundColor: ['#c0392b', '#e67e22', '#f1c40f', '#2c70c9', '#5a4fcf', '#1e8449', '#97a3ad', '#8e44ad'],
+      data: foldedMain.amounts,
+      backgroundColor: PIE_COLORS,
     }],
   },
   options: {
     responsive: true,
     maintainAspectRatio: false,
+    onClick: (evt, elements) => {
+      if (!elements.length) return;
+      const label = foldedMain.labels[elements[0].index];
+      selectDrilldown(label);
+    },
     plugins: {
       legend: {
         position: isMobile ? 'bottom' : 'right',
         labels: { boxWidth: isMobile ? 10 : 14, font: { size: isMobile ? 10 : 12 } },
       },
-      title: { display: true, text: 'รายจ่ายตามหมวด' },
+      title: { display: true, text: 'รายจ่ายตามหมวด (คลิก slice เพื่อดูรายละเอียด)' },
+      tooltip: { callbacks: { label: tooltipLabelWithFold(foldedMain) } },
     },
   },
 });
+
+const drilldownGroups = groupLabels.filter(g => groupMembers[g].length > 1);
+if (foldedMain.otherMembers) drilldownGroups.push(foldedMain.otherLabel);
+const drilldownSelect = document.getElementById('f-drilldown-group');
+drilldownGroups.forEach(g => {
+  const opt = document.createElement('option');
+  opt.value = g;
+  opt.textContent = g;
+  drilldownSelect.appendChild(opt);
+});
+
+function selectDrilldown(label) {
+  if (!drilldownGroups.includes(label)) return;
+  drilldownSelect.value = label;
+  renderDrilldown();
+  document.getElementById('drilldown-wrap').scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+let drilldownChart = null;
+function renderDrilldown() {
+  const canvas = document.getElementById('drilldown-chart');
+  const emptyEl = document.getElementById('drilldown-empty');
+  if (!drilldownGroups.length) {
+    drilldownSelect.style.display = 'none';
+    canvas.style.display = 'none';
+    emptyEl.style.display = 'block';
+    return;
+  }
+  const group = drilldownSelect.value;
+  const members = groupMembers[group];
+  const foldedSub = foldToTop(members.map(m => m.name), members.map(m => m.amount));
+  if (drilldownChart) drilldownChart.destroy();
+  drilldownChart = new Chart(canvas, {
+    type: 'pie',
+    data: {
+      labels: foldedSub.labels,
+      datasets: [{
+        data: foldedSub.amounts,
+        backgroundColor: PIE_COLORS,
+      }],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          position: isMobile ? 'bottom' : 'right',
+          labels: { boxWidth: isMobile ? 10 : 14, font: { size: isMobile ? 10 : 12 } },
+        },
+        title: { display: true, text: 'รายละเอียดกลุ่ม: ' + group },
+        tooltip: { callbacks: { label: tooltipLabelWithFold(foldedSub) } },
+      },
+    },
+  });
+}
+renderDrilldown();
 </script>
 {% endif %}
 </body>

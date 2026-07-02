@@ -354,16 +354,80 @@ def fetch_report_data(cur, granularity, year, month, day):
     }
 
 
+def fetch_report_data_custom(cur, date_from, date_to):
+    d_from = date.fromisoformat(date_from)
+    d_to = date.fromisoformat(date_to)
+    bucket_expr = (
+        "to_char(date_trunc('month', txn_date), 'YYYY-MM')"
+        if (d_to - d_from).days > 62
+        else "to_char(txn_date, 'YYYY-MM-DD')"
+    )
+
+    cur.execute(
+        f"""SELECT {bucket_expr} AS bucket,
+                   COALESCE(SUM(amount) FILTER (WHERE direction = 'expense'), 0) AS expense,
+                   COALESCE(SUM(amount) FILTER (WHERE direction = 'income'), 0) AS income
+            FROM slip_transactions
+            WHERE txn_date BETWEEN %s AND %s AND direction IN ('expense', 'income')
+            GROUP BY 1
+            ORDER BY 1""",
+        (d_from, d_to),
+    )
+    bucket_rows = cur.fetchall()
+    bucket_chart = {
+        "labels": [r[0] for r in bucket_rows],
+        "expense": [float(r[1]) for r in bucket_rows],
+        "income": [float(r[2]) for r in bucket_rows],
+    }
+
+    cur.execute(
+        """SELECT COALESCE(category, 'ไม่ระบุหมวด') AS category, SUM(amount) AS total
+            FROM slip_transactions
+            WHERE txn_date BETWEEN %s AND %s AND direction = 'expense'
+            GROUP BY 1
+            ORDER BY 2 DESC""",
+        (d_from, d_to),
+    )
+    category_rows = [{"name": r[0], "total": float(r[1])} for r in cur.fetchall()]
+
+    cur.execute(
+        """SELECT COALESCE(receiver_name, 'ไม่ระบุ') AS receiver, SUM(amount) AS total
+            FROM slip_transactions
+            WHERE txn_date BETWEEN %s AND %s AND direction = 'expense'
+            GROUP BY 1
+            ORDER BY 2 DESC
+            LIMIT 5""",
+        (d_from, d_to),
+    )
+    top_payees = [{"name": r[0], "total": float(r[1])} for r in cur.fetchall()]
+
+    total_expense = sum(bucket_chart["expense"])
+    total_income = sum(bucket_chart["income"])
+
+    return {
+        "period_label": f"{d_from.isoformat()} ถึง {d_to.isoformat()}",
+        "bucket_chart": bucket_chart, "category_rows": category_rows, "top_payees": top_payees,
+        "total_expense": total_expense, "total_income": total_income, "net": total_income - total_expense,
+    }
+
+
 @app.get("/reports")
-def reports(request: Request, granularity: str = "month", year: int = 0, month: int = 0, day: int = 0):
+def reports(
+    request: Request, granularity: str = "month", year: int = 0, month: int = 0, day: int = 0,
+    date_from: str = "", date_to: str = "",
+):
     redirect = require_login(request)
     if redirect:
         return redirect
 
+    custom_mode = bool(date_from and date_to)
     conn = db()
     try:
         with conn.cursor() as cur:
             data = fetch_report_data(cur, granularity, year, month, day)
+            if custom_mode:
+                data.update(fetch_report_data_custom(cur, date_from, date_to))
+            category_groups = {c["name"]: c["group_name"] for c in get_categories(cur)}
     finally:
         conn.close()
 
@@ -380,6 +444,7 @@ def reports(request: Request, granularity: str = "month", year: int = 0, month: 
             "role": request.session.get("role"),
             "monthly_chart": json.dumps(data["bucket_chart"]),
             "category_chart": json.dumps(category_chart),
+            "category_groups": json.dumps(category_groups, ensure_ascii=False),
             "total_expense": data["total_expense"],
             "total_income": data["total_income"],
             "net": data["net"],
@@ -393,6 +458,9 @@ def reports(request: Request, granularity: str = "month", year: int = 0, month: 
             "granularity": data["granularity"],
             "period_label": data["period_label"],
             "thai_months": THAI_MONTHS,
+            "custom_mode": custom_mode,
+            "date_from": date_from,
+            "date_to": date_to,
         },
     )
 
@@ -423,7 +491,10 @@ def _style_table_sheet(ws, df, table_name, currency_cols):
 
 
 @app.get("/reports/export/excel")
-def reports_export_excel(request: Request, granularity: str = "year", year: int = 0, month: int = 0, day: int = 0):
+def reports_export_excel(
+    request: Request, granularity: str = "year", year: int = 0, month: int = 0, day: int = 0,
+    date_from: str = "", date_to: str = "",
+):
     redirect = require_login(request)
     if redirect:
         return redirect
@@ -432,6 +503,8 @@ def reports_export_excel(request: Request, granularity: str = "year", year: int 
     try:
         with conn.cursor() as cur:
             data = fetch_report_data(cur, granularity, year, month, day)
+            if date_from and date_to:
+                data.update(fetch_report_data_custom(cur, date_from, date_to))
     finally:
         conn.close()
 
@@ -519,7 +592,10 @@ def reports_export_excel(request: Request, granularity: str = "year", year: int 
 
 
 @app.get("/reports/export/pdf")
-def reports_export_pdf(request: Request, granularity: str = "year", year: int = 0, month: int = 0, day: int = 0):
+def reports_export_pdf(
+    request: Request, granularity: str = "year", year: int = 0, month: int = 0, day: int = 0,
+    date_from: str = "", date_to: str = "",
+):
     redirect = require_login(request)
     if redirect:
         return redirect
@@ -533,6 +609,8 @@ def reports_export_pdf(request: Request, granularity: str = "year", year: int = 
     try:
         with conn.cursor() as cur:
             data = fetch_report_data(cur, granularity, year, month, day)
+            if date_from and date_to:
+                data.update(fetch_report_data_custom(cur, date_from, date_to))
     finally:
         conn.close()
 
@@ -744,7 +822,7 @@ def categories_view(request: Request):
 
 
 @app.post("/settings/categories/new")
-def categories_new(request: Request, name: str = Form(...), keywords: str = Form("")):
+def categories_new(request: Request, name: str = Form(...), keywords: str = Form(""), group_name: str = Form("")):
     redirect = require_admin(request)
     if redirect:
         return redirect
@@ -756,8 +834,8 @@ def categories_new(request: Request, name: str = Form(...), keywords: str = Form
             cur.execute("SELECT COALESCE(MAX(sort_order), 0) + 1 FROM categories")
             next_order = cur.fetchone()[0]
             cur.execute(
-                "INSERT INTO categories (name, keywords, sort_order) VALUES (%s, %s, %s)",
-                (name.strip(), kw_list, next_order),
+                "INSERT INTO categories (name, keywords, sort_order, group_name) VALUES (%s, %s, %s, %s)",
+                (name.strip(), kw_list, next_order, group_name.strip() or None),
             )
     finally:
         conn.close()
@@ -766,7 +844,9 @@ def categories_new(request: Request, name: str = Form(...), keywords: str = Form
 
 
 @app.post("/settings/categories/{cat_id}/edit")
-def categories_edit(cat_id: int, request: Request, name: str = Form(...), keywords: str = Form("")):
+def categories_edit(
+    cat_id: int, request: Request, name: str = Form(...), keywords: str = Form(""), group_name: str = Form("")
+):
     redirect = require_admin(request)
     if redirect:
         return redirect
@@ -776,8 +856,8 @@ def categories_edit(cat_id: int, request: Request, name: str = Form(...), keywor
     try:
         with conn, conn.cursor() as cur:
             cur.execute(
-                "UPDATE categories SET name = %s, keywords = %s WHERE id = %s",
-                (name.strip(), kw_list, cat_id),
+                "UPDATE categories SET name = %s, keywords = %s, group_name = %s WHERE id = %s",
+                (name.strip(), kw_list, group_name.strip() or None, cat_id),
             )
     finally:
         conn.close()

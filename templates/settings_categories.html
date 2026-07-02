@@ -45,6 +45,7 @@
   }
   .cat-row .name-input { flex: 0 0 220px; font-weight: 600; }
   .cat-row .keywords-input { flex: 1; min-width: 200px; }
+  .cat-row .group-input { flex: 0 0 160px; }
   .cat-row button.save-btn {
     padding: 7px 14px; border: none; border-radius: 8px; background: #2c70c9; color: white;
     font-size: 12px; font-weight: 600; cursor: pointer; font-family: inherit;
@@ -64,6 +65,7 @@
   }
   .add-wrap .name-input { flex: 0 0 220px; }
   .add-wrap .keywords-input { flex: 1; min-width: 220px; }
+  .add-wrap .group-input { flex: 0 0 160px; }
   .add-wrap button {
     padding: 9px 18px; border: none; border-radius: 8px; background: #1e8449; color: white;
     font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit;
@@ -106,6 +108,7 @@
       <form class="inline-edit" method="post" action="/settings/categories/{{ c.id }}/edit">
         <input class="name-input" type="text" name="name" value="{{ c.name }}" required>
         <input class="keywords-input" type="text" name="keywords" value="{{ c.keywords|join(', ') }}" placeholder="keyword คั่นด้วย comma">
+        <input class="group-input" type="text" name="group_name" value="{{ c.group_name or '' }}" placeholder="กลุ่ม (ถ้ามี)">
         <button type="submit" class="save-btn">บันทึก</button>
       </form>
       <form class="del-form" method="post" action="/settings/categories/{{ c.id }}/delete" onsubmit="return confirm('ลบหมวดนี้?');">
@@ -122,9 +125,11 @@
     <form method="post" action="/settings/categories/new">
       <input class="name-input" type="text" name="name" placeholder="ชื่อหมวด" required>
       <input class="keywords-input" type="text" name="keywords" placeholder="keyword คั่นด้วย comma เช่น เติมน้ำมัน, ปั๊ม, ปตท">
+      <input class="group-input" type="text" name="group_name" placeholder="กลุ่ม (ถ้ามี)">
       <button type="submit">+ เพิ่ม</button>
     </form>
     <div class="hint">ลำดับมีผลกับการเดาหมวดอัตโนมัติ — ระบบเช็คจากบนลงล่าง เจอ keyword แรกที่ตรงก็ใช้หมวดนั้น ลูกศรขึ้น/ลงสลับลำดับได้</div>
+    <div class="hint">กลุ่ม: ใส่ชื่อกลุ่มเดียวกันให้หลายหมวด เพื่อรวมเป็นก้อนเดียวในกราฟวงกลมหน้ารายงาน แล้วดูแยกย่อยได้จาก dropdown ใต้กราฟ — ปล่อยว่างถ้าไม่ต้องรวมกับใคร</div>
   </div>
 </main>
 </body>

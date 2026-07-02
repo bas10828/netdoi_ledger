@@ -8,8 +8,11 @@ import psycopg2.extras
 def get_categories(cur):
     """Works regardless of the calling cursor's factory — opens its own RealDictCursor."""
     with cur.connection.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as c:
-        c.execute("SELECT name, keywords FROM categories ORDER BY sort_order, id")
-        return [{"name": r["name"], "keywords": list(r["keywords"] or [])} for r in c.fetchall()]
+        c.execute("SELECT name, keywords, group_name FROM categories ORDER BY sort_order, id")
+        return [
+            {"name": r["name"], "keywords": list(r["keywords"] or []), "group_name": r["group_name"]}
+            for r in c.fetchall()
+        ]
 
 
 def guess_category(memo, categories):
