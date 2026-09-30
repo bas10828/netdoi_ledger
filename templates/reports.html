@@ -25,74 +25,162 @@
     font-size: 11px; padding: 2px 10px; border-radius: 10px; margin-left: 8px;
     background: rgba(255,255,255,0.15); color: #cdd9e5; vertical-align: middle;
   }
-  header a { color: #cdd9e5; text-decoration: none; font-size: 13px; padding: 6px 12px; border-radius: 6px; transition: background .15s; }
+  header a { color: #cdd9e5; text-decoration: none; font-size: 13px; padding: 6px 12px; border-radius: 6px; }
   header a:hover { color: white; background: rgba(255,255,255,0.1); }
-  main { padding: 28px 32px; max-width: 1800px; margin: 0 auto; }
-  .back-link { display: inline-flex; align-items: center; gap: 6px; margin-bottom: 18px; color: #2c70c9; text-decoration: none; font-size: 13px; font-weight: 600; }
+  main { padding: 24px 32px 48px; max-width: 1400px; margin: 0 auto; }
+
+  /* Toolbar */
+  .toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
+  .back-link { color: #2c70c9; text-decoration: none; font-size: 13px; font-weight: 600; margin-right: auto; }
   .back-link:hover { text-decoration: underline; }
-  .toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
-  .toolbar label { font-size: 13px; color: #6b7785; font-weight: 600; }
-  .toolbar select {
-    padding: 8px 12px; border: 1px solid #e6e9ec; border-radius: 8px; font-size: 13px;
-    font-family: inherit; background: white;
+  .month-nav { display: flex; align-items: center; background: white; border-radius: 10px; box-shadow: 0 1px 4px rgba(0,0,0,0.06); }
+  .month-nav a, .month-nav span.nav-disabled {
+    padding: 8px 14px; font-size: 16px; font-weight: 700; color: #2c3e50; text-decoration: none; line-height: 1;
   }
-  .export-dropdown { position: relative; margin-left: auto; }
-  .export-dropdown .btn-export {
-    padding: 9px 18px; border: none; border-radius: 8px; font-size: 13px; font-weight: 600;
+  .month-nav a:hover { background: #f0f2f5; }
+  .month-nav span.nav-disabled { color: #d0d5db; }
+  .month-nav select {
+    border: none; border-left: 1px solid #eef1f5; border-right: 1px solid #eef1f5;
+    padding: 8px 12px; font-size: 15px; font-weight: 700; font-family: inherit; background: white; color: #1c2833; cursor: pointer;
+  }
+  .btn {
+    padding: 9px 16px; border: none; border-radius: 8px; font-size: 13px; font-weight: 600;
     cursor: pointer; font-family: inherit; background: #1e8449; color: white;
   }
-  .export-dropdown .btn-export:hover { background: #186a3a; }
+  .btn:hover { background: #186a3a; }
+  .export-dropdown { position: relative; }
   .export-menu {
     display: none; position: absolute; top: calc(100% + 6px); right: 0; z-index: 10;
-    background: white; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.15);
-    overflow: hidden; min-width: 120px;
+    background: white; border-radius: 10px; box-shadow: 0 6px 20px rgba(0,0,0,0.16); padding: 12px; width: 280px;
   }
   .export-menu.open { display: block; }
-  .export-menu button {
-    display: block; width: 100%; padding: 10px 16px; border: none; background: white;
-    text-align: left; font-size: 13px; font-weight: 600; color: #1c2833; cursor: pointer; font-family: inherit;
+  .export-menu h4 { margin: 0 0 8px; font-size: 12px; color: #6b7785; font-weight: 600; }
+  .export-menu .row { display: flex; gap: 8px; margin-bottom: 12px; }
+  .export-menu .row:last-child { margin-bottom: 0; }
+  .export-menu .row button { flex: 1; }
+  .export-menu input[type=date] {
+    flex: 1; min-width: 0; padding: 6px 8px; border: 1px solid #e6e9ec; border-radius: 6px; font-family: inherit; font-size: 12px;
   }
-  .export-menu button:hover { background: #f0f2f5; }
-  .chart-wrap {
-    background: white; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.06);
-    padding: 20px 22px; margin-bottom: 18px;
+  .btn-ghost { background: #f0f2f5; color: #1c2833; }
+  .btn-ghost:hover { background: #e2e6ea; }
+
+  /* Sections */
+  .section { background: white; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.06); padding: 20px 22px; margin-bottom: 18px; }
+  .section-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
+  .section h2 { font-size: 16px; margin: 0; font-weight: 700; }
+  .section .hint { font-size: 12px; color: #97a3ad; }
+
+  /* KPI cards */
+  .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 18px; }
+  .kpi { background: white; border-radius: 12px; padding: 16px 18px; box-shadow: 0 2px 10px rgba(0,0,0,0.06); border-top: 4px solid #d6dbe1; }
+  .kpi.k-expense { border-top-color: #c0392b; }
+  .kpi.k-income { border-top-color: #1e8449; }
+  .kpi.k-net { border-top-color: #2c70c9; }
+  .kpi.k-car { border-top-color: #eda100; }
+  .kpi .label { font-size: 13px; color: #6b7785; font-weight: 600; }
+  .kpi .value { font-size: 24px; font-weight: 700; margin: 4px 0 6px; font-variant-numeric: tabular-nums; }
+  .kpi .sub { font-size: 12px; color: #97a3ad; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+  .notice {
+    background: #fff8ec; border: 1px solid #f5d9a8; color: #8a5a00; border-radius: 10px;
+    padding: 10px 14px; font-size: 13px; margin-bottom: 18px;
   }
-  .chart-row { display: flex; flex-wrap: wrap; gap: 18px; align-items: flex-start; }
-  .chart-row .chart-wrap { flex: 1 1 320px; margin-bottom: 0; }
-  .chart-row .chart-wrap.chart-canvas-wrap { height: 320px; }
-  @media (max-width: 600px) {
-    .chart-row .chart-wrap.chart-canvas-wrap { height: 260px; }
+  .notice a { color: #8a5a00; font-weight: 600; }
+
+  /* Change badge */
+  .chg { font-size: 12px; font-weight: 700; padding: 1px 7px; border-radius: 8px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .chg.bad { background: #fdecea; color: #c0392b; }
+  .chg.good { background: #e8f6ee; color: #1e8449; }
+  .chg.flat { background: #f0f2f5; color: #6b7785; }
+
+  /* Focus (drill-down per category) */
+  .chips { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 18px; }
+  .chips button {
+    border: 1px solid #e0e4e8; background: white; padding: 6px 12px; border-radius: 16px; white-space: nowrap;
+    font-family: inherit; font-size: 13px; font-weight: 600; color: #4a5a6a; cursor: pointer;
   }
-  .cards { display: flex; flex-wrap: wrap; gap: 16px; margin-bottom: 18px; }
-  .card {
-    flex: 1 1 200px; background: white; border-radius: 12px; padding: 18px 20px;
-    box-shadow: 0 2px 10px rgba(0,0,0,0.06); border-left: 4px solid #d6dbe1;
+  .chips button:hover { border-color: #97a3ad; }
+  .chips button.active { background: #2c3e50; border-color: #2c3e50; color: white; }
+  .chips button.overview { border-style: dashed; }
+  .chips button.overview.active { border-style: solid; }
+  .focus-title { font-size: 20px; font-weight: 700; margin: 0 0 12px; }
+  .stats { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-bottom: 18px; }
+  .stat { background: #f7f9fb; border-radius: 10px; padding: 12px 14px; }
+  .stat.main { background: #fdf3f2; }
+  .stat .label { font-size: 12px; color: #6b7785; font-weight: 600; }
+  .stat .value { font-size: 19px; font-weight: 700; margin-top: 2px; font-variant-numeric: tabular-nums; }
+  .stat .sub { font-size: 12px; margin-top: 4px; color: #97a3ad; }
+  .chart-box { position: relative; height: 300px; margin-bottom: 18px; }
+  .sub-h { font-size: 13px; color: #6b7785; font-weight: 700; margin: 4px 0 8px; }
+  .zero { color: #c5ccd3; }
+
+  .table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; margin-bottom: 18px; }
+  table.grid { width: 100%; border-collapse: collapse; font-size: 14px; font-variant-numeric: tabular-nums; }
+  table.grid th {
+    text-align: right; font-size: 12px; color: #6b7785; font-weight: 600; padding: 8px 10px;
+    border-bottom: 2px solid #eef1f5; white-space: nowrap;
   }
-  .card.c-expense { border-left-color: #c0392b; }
-  .card.c-income { border-left-color: #1e8449; }
-  .card.c-net { border-left-color: #2c70c9; }
-  .card .label { font-size: 12px; color: #888; margin-bottom: 6px; font-weight: 500; }
-  .card .value { font-size: 22px; font-weight: 700; }
-  .card .value.expense { color: #c0392b; }
-  .card .value.income { color: #1e8449; }
-  .card .value.net { color: #2c70c9; }
-  .payee-list { flex: 1 1 280px; max-width: 360px; }
-  .payee-list h3 { font-size: 13px; color: #6b7785; margin: 0 0 12px; font-weight: 600; }
-  .payee-row {
-    display: flex; justify-content: space-between; padding: 9px 0; font-size: 13px;
-    border-bottom: 1px solid #f0f2f5;
+  table.grid th.l, table.grid td.l { text-align: left; }
+  table.grid td { padding: 8px 10px; text-align: right; border-bottom: 1px solid #f0f2f5; white-space: nowrap; }
+  table.grid td.wrap { white-space: normal; min-width: 140px; }
+  table.grid td.cur { font-weight: 700; background: #fbfcfd; }
+  table.grid tr.link { cursor: pointer; }
+  table.grid tr.link:hover td { background: #f5f8fb; }
+  table.grid tr.link .name::after { content: " ›"; color: #97a3ad; }
+  table.grid tr.total td { font-weight: 700; border-top: 2px solid #d6dbe1; border-bottom: none; }
+  table.members { min-width: 640px; }
+  table.txns td.memo { color: #6b7785; font-size: 13px; }
+  table.txns td.cat { font-size: 12px; color: #6b7785; }
+  table.txns a { color: #2c70c9; text-decoration: none; }
+  .share-bar { height: 4px; background: #eef1f5; border-radius: 2px; margin-top: 4px; max-width: 200px; }
+  .share-bar span { display: block; height: 100%; background: #c0392b; border-radius: 2px; opacity: .55; }
+  .more-btn {
+    border: none; background: #f0f2f5; color: #2c3e50; font-family: inherit; font-weight: 600; font-size: 13px;
+    padding: 8px 14px; border-radius: 8px; cursor: pointer; margin-top: 8px;
   }
+  /* Payees */
+  .payee-row { display: flex; justify-content: space-between; gap: 12px; padding: 9px 0; font-size: 14px; border-bottom: 1px solid #f0f2f5; }
   .payee-row:last-child { border-bottom: none; }
   .payee-row .rank { color: #97a3ad; font-weight: 600; margin-right: 8px; }
-  .payee-row .amount { font-weight: 600; color: #c0392b; }
-  .empty { padding: 50px; text-align: center; color: #aab2ba; font-size: 14px; }
-  @media (max-width: 768px) {
+  .payee-row .cnt { color: #97a3ad; font-size: 12px; margin-left: 6px; }
+  .payee-row .amount { font-weight: 700; color: #c0392b; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .empty { padding: 30px; text-align: center; color: #aab2ba; font-size: 14px; }
+
+  @media (max-width: 900px) {
+    .kpis { grid-template-columns: repeat(2, 1fr); }
+    .stats { grid-template-columns: repeat(3, 1fr); }
+  }
+  @media (max-width: 600px) {
     header { padding: 14px 16px; }
-    main { padding: 16px; }
+    main { padding: 16px 16px 40px; }
+    .back-link { width: 100%; }
+    .month-nav { flex: 1; }
+    .month-nav select { flex: 1; }
+    .section { padding: 16px 14px; }
+    .kpis { gap: 10px; }
+    .kpi { padding: 12px 14px; }
+    .kpi .value { font-size: 19px; }
+    .chart-box { height: 260px; }
+    .chips { flex-wrap: nowrap; overflow-x: auto; margin: 0 -14px 16px; padding: 0 14px 4px; }
+    .stats { grid-template-columns: repeat(2, 1fr); }
+    .stat.main { grid-column: span 2; }
+    .stat .value { font-size: 17px; }
+    .focus-title { font-size: 18px; }
+    .export-menu { right: auto; left: 0; }
   }
 </style>
 </head>
 <body>
+{% macro chg(change, cur, prev, up_is_bad=True) -%}
+  {%- if change is none -%}
+    {%- if cur and not prev -%}<span class="chg {{ 'bad' if up_is_bad else 'good' }}">ใหม่</span>
+    {%- else -%}<span class="chg flat">–</span>{%- endif -%}
+  {%- elif change|abs < 0.5 -%}<span class="chg flat">0%</span>
+  {%- else -%}
+    {%- set up = change > 0 -%}
+    <span class="chg {{ ('bad' if up == up_is_bad else 'good') }}">{{ '▲' if up else '▼' }} {{ '%.0f'|format(change|abs) }}%</span>
+  {%- endif -%}
+{%- endmacro %}
+{% macro amt(v) -%}{% if v %}{{ v|baht }}{% else %}<span class="zero">–</span>{% endif %}{%- endmacro %}
 <header>
   <div class="title">
     <div class="badge-icon">฿</div>
@@ -101,307 +189,284 @@
   <a href="/logout">ออกจากระบบ</a>
 </header>
 <main>
-  <a class="back-link" href="/">&laquo; กลับหน้าหลัก</a>
-  {% if years %}
+  {% set opt_values = month_options|map(attribute='value')|list %}
+  {% set idx = opt_values.index(selected_month) %}
   <div class="toolbar">
-    <label for="f-granularity">ระดับ</label>
-    <select id="f-granularity" onchange="navigateReports()">
-      <option value="year" {% if granularity == 'year' %}selected{% endif %}>ปี</option>
-      <option value="month" {% if granularity == 'month' %}selected{% endif %}>เดือน</option>
-      <option value="day" {% if granularity == 'day' %}selected{% endif %}>วัน</option>
-    </select>
-    <label for="f-year">ปี</label>
-    <select id="f-year" onchange="navigateReports()">
-      {% for y in years %}
-      <option value="{{ y }}" {% if y == selected_year %}selected{% endif %}>{{ y }}</option>
-      {% endfor %}
-    </select>
-    {% if granularity in ('month', 'day') %}
-    <label for="f-month">เดือน</label>
-    <select id="f-month" onchange="navigateReports()">
-      {% for m in months %}
-      <option value="{{ m }}" {% if m == selected_month %}selected{% endif %}>{{ thai_months.get(m, m) }}</option>
-      {% endfor %}
-    </select>
-    {% endif %}
-    {% if granularity == 'day' %}
-    <label for="f-day">วัน</label>
-    <select id="f-day" onchange="navigateReports()">
-      {% for d in days %}
-      <option value="{{ d }}" {% if d == selected_day %}selected{% endif %}>{{ d }}</option>
-      {% endfor %}
-    </select>
-    {% endif %}
-    <button type="button" class="btn-export" onclick="toggleCustomRange()" id="custom-toggle-btn">
-      {{ "ยกเลิกกำหนดเอง" if custom_mode else "กำหนดเอง" }}
-    </button>
+    <a class="back-link" href="/">&laquo; กลับหน้าหลัก</a>
+    <div class="month-nav">
+      {% if idx + 1 < opt_values|length %}<a href="/reports?month={{ opt_values[idx + 1] }}" title="เดือนก่อน">&lsaquo;</a>{% else %}<span class="nav-disabled">&lsaquo;</span>{% endif %}
+      <select onchange="location.href='/reports?month=' + this.value" aria-label="เลือกเดือน">
+        {% for o in month_options %}
+        <option value="{{ o.value }}" {% if o.value == selected_month %}selected{% endif %}>{{ o.label }}</option>
+        {% endfor %}
+      </select>
+      {% if idx > 0 %}<a href="/reports?month={{ opt_values[idx - 1] }}" title="เดือนถัดไป">&rsaquo;</a>{% else %}<span class="nav-disabled">&rsaquo;</span>{% endif %}
+    </div>
     <div class="export-dropdown">
-      <button type="button" class="btn-export" onclick="toggleExportMenu()">Export รายงาน &#9662;</button>
+      <button type="button" class="btn" onclick="toggleExportMenu()">Export &#9662;</button>
       <div class="export-menu" id="export-menu">
-        <button type="button" onclick="exportReport('excel')">Excel</button>
-        <button type="button" onclick="exportReport('pdf')">PDF</button>
+        <h4>{{ cur_label }}</h4>
+        <div class="row">
+          <button type="button" class="btn" onclick="exportReport('excel', '{{ cur_from }}', '{{ cur_to }}')">Excel</button>
+          <button type="button" class="btn" onclick="exportReport('pdf', '{{ cur_from }}', '{{ cur_to }}')">PDF</button>
+        </div>
+        <h4>กำหนดช่วงเอง</h4>
+        <div class="row">
+          <input type="date" id="x-from" value="{{ cur_from }}" aria-label="ตั้งแต่">
+          <input type="date" id="x-to" value="{{ cur_to }}" aria-label="ถึง">
+        </div>
+        <div class="row">
+          <button type="button" class="btn btn-ghost" onclick="exportCustom('excel')">Excel</button>
+          <button type="button" class="btn btn-ghost" onclick="exportCustom('pdf')">PDF</button>
+        </div>
       </div>
     </div>
   </div>
-  <div class="toolbar" id="custom-range-panel" style="{{ '' if custom_mode else 'display:none;' }}">
-    <label for="f-date-from">ตั้งแต่</label>
-    <input type="date" id="f-date-from" value="{{ date_from }}">
-    <label for="f-date-to">ถึง</label>
-    <input type="date" id="f-date-to" value="{{ date_to }}">
-    <button type="button" class="btn-export" onclick="applyCustomRange()">ดู</button>
+
+  <div class="kpis">
+    <div class="kpi k-expense">
+      <div class="label">รายจ่าย {{ cur_label }}</div>
+      <div class="value">{{ kpis.expense|baht }}</div>
+      <div class="sub">{{ chg(kpis.expense_change, kpis.expense, kpis.expense_prev) }} เทียบ {{ prev_label }} ({{ kpis.expense_prev|baht }})</div>
+    </div>
+    <div class="kpi k-income">
+      <div class="label">รายรับ {{ cur_label }}</div>
+      <div class="value">{{ kpis.income|baht }}</div>
+      <div class="sub">{{ chg(kpis.income_change, kpis.income, kpis.income_prev, up_is_bad=False) }} เทียบ {{ prev_label }} ({{ kpis.income_prev|baht }})</div>
+    </div>
+    <div class="kpi k-net">
+      <div class="label">สุทธิ {{ cur_label }}</div>
+      <div class="value">{{ kpis.net|baht }}</div>
+      <div class="sub">{{ prev_label }}: {{ kpis.net_prev|baht }}</div>
+    </div>
+    <div class="kpi k-car">
+      <div class="label">จำนวนรายการรายจ่าย</div>
+      <div class="value">{{ kpis.expense_count }}</div>
+      <div class="sub">{{ cur_label }}</div>
+    </div>
+  </div>
+
+  {% if kpis.unknown_count %}
+  <div class="notice">
+    มี {{ kpis.unknown_count }} รายการใน {{ cur_label }} (รวม {{ kpis.unknown_total|baht }} บาท) ที่ยังไม่ระบุว่าเป็นรายรับหรือรายจ่าย — ยังไม่ถูกนับในตัวเลขด้านล่าง
+    <a href="/">ไปแก้ที่หน้าหลัก</a>
   </div>
   {% endif %}
-  {% if years %}
-  <div class="cards">
-    <div class="card c-expense"><div class="label">รายจ่าย ({{ period_label }})</div><div class="value expense">{{ "%.2f"|format(total_expense) }}</div></div>
-    <div class="card c-income"><div class="label">รายรับ ({{ period_label }})</div><div class="value income">{{ "%.2f"|format(total_income) }}</div></div>
-    <div class="card c-net"><div class="label">สุทธิ ({{ period_label }})</div><div class="value net">{{ "%.2f"|format(net) }}</div></div>
-  </div>
-  {% endif %}
-  <div class="chart-wrap">
-    {% if years %}
-    <canvas id="monthly-chart" height="100"></canvas>
+
+  <section class="section">
+    <div class="section-head">
+      <h2>เจาะดูรายหมวด</h2>
+      <span class="hint">กดเลือกหมวดเพื่อสลับดู</span>
+    </div>
+    <div class="chips" id="focus-chips"></div>
+    <div class="focus-title" id="f-title"></div>
+    <div class="stats" id="f-stats"></div>
+    <div class="sub-h">แนวโน้ม 12 เดือน</div>
+    <div class="chart-box"><canvas id="trend-chart"></canvas></div>
+    <div id="f-members"></div>
+    <div id="f-txns"></div>
+  </section>
+  <section class="section">
+    <div class="section-head"><h2>Top 5 ผู้รับเงิน {{ cur_label }}</h2></div>
+    {% if top_payees %}
+    {% for p in top_payees %}
+    <div class="payee-row">
+      <span><span class="rank">{{ loop.index }}.</span>{{ p.name }}<span class="cnt">{{ p.count }} ครั้ง</span></span>
+      <span class="amount">{{ p.total|baht }}</span>
+    </div>
+    {% endfor %}
     {% else %}
-    <div class="empty">ยังไม่มีรายการ</div>
+    <div class="empty">ไม่มีรายจ่ายในเดือนนี้</div>
     {% endif %}
-  </div>
-  {% if years %}
-  <div class="chart-row">
-    <div class="chart-wrap chart-canvas-wrap">
-      <canvas id="category-chart"></canvas>
-    </div>
-    <div class="chart-wrap payee-list">
-      <h3>Top 5 ผู้รับเงิน ({{ period_label }})</h3>
-      {% if top_payees %}
-      {% for p in top_payees %}
-      <div class="payee-row">
-        <span><span class="rank">{{ loop.index }}.</span>{{ p.name }}</span>
-        <span class="amount">{{ "%.2f"|format(p.total) }}</span>
-      </div>
-      {% endfor %}
-      {% else %}
-      <div class="empty">ยังไม่มีรายการ</div>
-      {% endif %}
-    </div>
-  </div>
-  <div class="chart-row">
-    <div class="chart-wrap chart-canvas-wrap" id="drilldown-wrap">
-      <div class="toolbar" style="margin-bottom: 10px;">
-        <label for="f-drilldown-group">ดูรายละเอียดกลุ่ม</label>
-        <select id="f-drilldown-group" onchange="renderDrilldown()"></select>
-      </div>
-      <canvas id="drilldown-chart"></canvas>
-      <div class="empty" id="drilldown-empty" style="display:none;">ไม่มีกลุ่มที่แยกย่อย</div>
-    </div>
-  </div>
-  {% endif %}
+  </section>
 </main>
 <script>
-let customActive = {{ 'true' if custom_mode else 'false' }};
-
-function currentReportParams() {
-  if (customActive) {
-    const params = new URLSearchParams();
-    params.set('date_from', document.getElementById('f-date-from').value);
-    params.set('date_to', document.getElementById('f-date-to').value);
-    return params;
-  }
-  const granularity = document.getElementById('f-granularity').value;
-  const params = new URLSearchParams({ granularity, year: document.getElementById('f-year').value });
-  const monthEl = document.getElementById('f-month');
-  if (monthEl) params.set('month', monthEl.value);
-  const dayEl = document.getElementById('f-day');
-  if (dayEl) params.set('day', dayEl.value);
-  return params;
-}
-
-function navigateReports() {
-  customActive = false;
-  location.href = '/reports?' + currentReportParams().toString();
-}
-
-function toggleCustomRange() {
-  const panel = document.getElementById('custom-range-panel');
-  const open = panel.style.display !== 'none';
-  panel.style.display = open ? 'none' : 'flex';
-}
-
-function applyCustomRange() {
-  const from = document.getElementById('f-date-from').value;
-  const to = document.getElementById('f-date-to').value;
-  if (!from || !to) return;
-  customActive = true;
-  location.href = '/reports?' + currentReportParams().toString();
-}
-
 function toggleExportMenu() {
   document.getElementById('export-menu').classList.toggle('open');
 }
 
-function exportReport(kind) {
+function exportReport(kind, from, to) {
   document.getElementById('export-menu').classList.remove('open');
-  location.href = `/reports/export/${kind}?` + currentReportParams().toString();
+  location.href = `/reports/export/${kind}?` + new URLSearchParams({ date_from: from, date_to: to });
+}
+
+function exportCustom(kind) {
+  const from = document.getElementById('x-from').value;
+  const to = document.getElementById('x-to').value;
+  if (from && to) exportReport(kind, from, to);
 }
 
 document.addEventListener('click', (e) => {
   const dropdown = document.querySelector('.export-dropdown');
-  if (dropdown && !dropdown.contains(e.target)) {
-    document.getElementById('export-menu').classList.remove('open');
-  }
-});
-</script>
-{% if years %}
-<script>
-const monthlyData = {{ monthly_chart|safe }};
-new Chart(document.getElementById('monthly-chart'), {
-  type: 'bar',
-  data: {
-    labels: monthlyData.labels,
-    datasets: [
-      { label: 'รายรับ', data: monthlyData.income, backgroundColor: '#1e8449' },
-      { label: 'รายจ่าย', data: monthlyData.expense, backgroundColor: '#c0392b' },
-    ],
-  },
-  options: {
-    responsive: true,
-    plugins: { legend: { position: 'top' } },
-    scales: { y: { beginAtZero: true } },
-  },
+  if (!dropdown.contains(e.target)) document.getElementById('export-menu').classList.remove('open');
 });
 
-const categoryData = {{ category_chart|safe }};
-const categoryGroups = {{ category_groups|safe }};
+const R = {{ report_json|safe }};
+const IS_ADMIN = {{ 'true' if role == 'admin' else 'false' }};
+// Fixed-order categorical palette (references/palette.md) — never cycled. Series past
+// the 8th fold into one "อื่นๆ" segment instead of repeating a hue.
+const COLORS = ['#2a78d6', '#1baf7a', '#eda100', '#008300', '#4a3aa7', '#e34948', '#e87ba4', '#eb6834'];
+const OTHER_COLOR = '#b4bcc5';
 const isMobile = window.matchMedia('(max-width: 600px)').matches;
-// Fixed-order categorical palette (references/palette.md) — never cycled. A 9th+
-// series folds into "อื่นๆ (รวม)" instead of repeating a hue.
-const PIE_COLORS = ['#2a78d6', '#1baf7a', '#eda100', '#008300', '#4a3aa7', '#e34948', '#e87ba4', '#eb6834'];
 
-function foldToTop(labels, amounts, max = PIE_COLORS.length) {
-  const idx = labels.map((_, i) => i).sort((a, b) => amounts[b] - amounts[a]);
-  if (idx.length <= max) {
-    return { labels: idx.map(i => labels[i]), amounts: idx.map(i => amounts[i]), otherLabel: null, otherMembers: null };
+const sum = (arr) => arr.reduce((a, b) => a + b, 0);
+const fmt = (v) => v.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const amt = (v) => v ? fmt(v) : '<span class="zero">–</span>';
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+function chg(change, cur, prev) {
+  if (change === null) {
+    return cur && !prev ? '<span class="chg bad">ใหม่</span>' : '<span class="chg flat">–</span>';
   }
-  const topIdx = idx.slice(0, max - 1);
-  const restIdx = idx.slice(max - 1);
-  const restTotal = restIdx.reduce((sum, i) => sum + amounts[i], 0);
-  const otherLabel = `อื่นๆ (รวม ${restIdx.length} กลุ่ม)`;
-  return {
-    labels: [...topIdx.map(i => labels[i]), otherLabel],
-    amounts: [...topIdx.map(i => amounts[i]), restTotal],
-    otherLabel,
-    otherMembers: restIdx.map(i => ({ name: labels[i], amount: amounts[i] })).sort((a, b) => b.amount - a.amount),
-  };
+  if (Math.abs(change) < 0.5) return '<span class="chg flat">0%</span>';
+  const up = change > 0;
+  return `<span class="chg ${up ? 'bad' : 'good'}">${up ? '▲' : '▼'} ${Math.abs(change).toFixed(0)}%</span>`;
 }
 
-function tooltipLabelWithFold(folded) {
-  return (ctx) => {
-    const line = `${ctx.label}: ${ctx.formattedValue}`;
-    if (ctx.label === folded.otherLabel && folded.otherMembers) {
-      return [line, ...folded.otherMembers.map(m => `  · ${m.name}: ${m.amount.toFixed(2)}`)];
-    }
-    return line;
-  };
+function foldSeries(members) {
+  const series = members.filter(m => sum(m.trend) > 0).sort((a, b) => sum(b.trend) - sum(a.trend));
+  if (series.length <= COLORS.length) return series.map((s, i) => ({ name: s.name, data: s.trend, color: COLORS[i] }));
+  const top = series.slice(0, COLORS.length - 1).map((s, i) => ({ name: s.name, data: s.trend, color: COLORS[i] }));
+  const rest = series.slice(COLORS.length - 1);
+  const data = R.month_labels.map((_, i) => sum(rest.map(s => s.trend[i])));
+  return [...top, { name: `อื่นๆ (${rest.length} รายการ)`, data, color: OTHER_COLOR }];
 }
 
-const groupTotals = {};
-const groupMembers = {};
-categoryData.labels.forEach((label, i) => {
-  const amount = categoryData.amounts[i];
-  const group = categoryGroups[label] || label;
-  groupTotals[group] = (groupTotals[group] || 0) + amount;
-  if (!groupMembers[group]) groupMembers[group] = [];
-  groupMembers[group].push({ name: label, amount });
-});
-const groupLabels = Object.keys(groupTotals);
-const foldedMain = foldToTop(groupLabels, groupLabels.map(g => groupTotals[g]));
-if (foldedMain.otherMembers) {
-  groupMembers[foldedMain.otherLabel] = foldedMain.otherMembers;
-}
-
-const mainChart = new Chart(document.getElementById('category-chart'), {
-  type: 'pie',
-  data: {
-    labels: foldedMain.labels,
-    datasets: [{
-      data: foldedMain.amounts,
-      backgroundColor: PIE_COLORS,
-    }],
-  },
-  options: {
-    responsive: true,
-    maintainAspectRatio: false,
-    onClick: (evt, elements) => {
-      if (!elements.length) return;
-      const label = foldedMain.labels[elements[0].index];
-      selectDrilldown(label);
-    },
-    plugins: {
-      legend: {
-        position: isMobile ? 'bottom' : 'right',
-        labels: { boxWidth: isMobile ? 10 : 14, font: { size: isMobile ? 10 : 12 } },
-      },
-      title: { display: true, text: 'รายจ่ายตามหมวด (คลิก slice เพื่อดูรายละเอียด)' },
-      tooltip: { callbacks: { label: tooltipLabelWithFold(foldedMain) } },
-    },
-  },
-});
-
-const drilldownGroups = groupLabels.filter(g => groupMembers[g].length > 1);
-if (foldedMain.otherMembers) drilldownGroups.push(foldedMain.otherLabel);
-const drilldownSelect = document.getElementById('f-drilldown-group');
-drilldownGroups.forEach(g => {
-  const opt = document.createElement('option');
-  opt.value = g;
-  opt.textContent = g;
-  drilldownSelect.appendChild(opt);
-});
-
-function selectDrilldown(label) {
-  if (!drilldownGroups.includes(label)) return;
-  drilldownSelect.value = label;
-  renderDrilldown();
-  document.getElementById('drilldown-wrap').scrollIntoView({ behavior: 'smooth', block: 'center' });
-}
-
-let drilldownChart = null;
-function renderDrilldown() {
-  const canvas = document.getElementById('drilldown-chart');
-  const emptyEl = document.getElementById('drilldown-empty');
-  if (!drilldownGroups.length) {
-    drilldownSelect.style.display = 'none';
-    canvas.style.display = 'none';
-    emptyEl.style.display = 'block';
-    return;
-  }
-  const group = drilldownSelect.value;
-  const members = groupMembers[group];
-  const foldedSub = foldToTop(members.map(m => m.name), members.map(m => m.amount));
-  if (drilldownChart) drilldownChart.destroy();
-  drilldownChart = new Chart(canvas, {
-    type: 'pie',
+let chart = null;
+function renderChart(view) {
+  const series = foldSeries(view.members);
+  if (chart) chart.destroy();
+  chart = new Chart(document.getElementById('trend-chart'), {
+    type: 'bar',
     data: {
-      labels: foldedSub.labels,
-      datasets: [{
-        data: foldedSub.amounts,
-        backgroundColor: PIE_COLORS,
-      }],
+      labels: R.month_labels,
+      datasets: series.map(s => ({ label: s.name, data: s.data, backgroundColor: s.color })),
     },
     options: {
       responsive: true,
       maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      scales: {
+        x: { stacked: true, grid: { display: false } },
+        y: { stacked: true, beginAtZero: true, ticks: { callback: (v) => v.toLocaleString('th-TH') } },
+      },
       plugins: {
         legend: {
-          position: isMobile ? 'bottom' : 'right',
-          labels: { boxWidth: isMobile ? 10 : 14, font: { size: isMobile ? 10 : 12 } },
+          display: series.length > 1, position: 'bottom',
+          labels: { boxWidth: isMobile ? 10 : 12, font: { size: isMobile ? 10 : 12 } },
         },
-        title: { display: true, text: 'รายละเอียดกลุ่ม: ' + group },
-        tooltip: { callbacks: { label: tooltipLabelWithFold(foldedSub) } },
+        tooltip: {
+          filter: (item) => item.raw > 0,
+          itemSort: (a, b) => b.raw - a.raw,
+          callbacks: {
+            label: (ctx) => `${ctx.dataset.label}: ${fmt(ctx.raw)}`,
+            footer: (items) => items.length > 1 ? 'รวม: ' + fmt(sum(items.map(i => i.raw))) : '',
+          },
+        },
       },
     },
   });
 }
-renderDrilldown();
+
+function renderStats(view) {
+  const t = view.total;
+  document.getElementById('f-stats').innerHTML = `
+    <div class="stat main"><div class="label">${R.cur_label}</div><div class="value">${fmt(t.cur)}</div>
+      <div class="sub">${chg(t.change, t.cur, t.prev)} เทียบเดือนก่อน</div></div>
+    <div class="stat"><div class="label">${R.prev_label}</div><div class="value">${fmt(t.prev)}</div></div>
+    <div class="stat"><div class="label">เฉลี่ย/เดือน</div><div class="value">${fmt(t.avg)}</div>
+      <div class="sub">จาก ${R.avg_months} เดือนล่าสุด</div></div>
+    <div class="stat"><div class="label">${R.ytd_label}</div><div class="value">${fmt(t.ytd)}</div></div>
+    <div class="stat"><div class="label">ทั้งหมด</div><div class="value">${fmt(t.all)}</div></div>`;
+}
+
+function renderMembers(view) {
+  const el = document.getElementById('f-members');
+  if (view.members.length < 2) { el.innerHTML = ''; return; }
+  const t = view.total;
+  const rows = view.members.map((m, i) => `
+    <tr class="${m.link ? 'link' : ''}" data-idx="${i}">
+      <td class="l wrap"><span class="name">${esc(m.name)}</span>${t.cur ? `<div class="share-bar"><span style="width:${(m.cur / t.cur * 100).toFixed(1)}%"></span></div>` : ''}</td>
+      <td class="cur">${amt(m.cur)}</td><td>${amt(m.prev)}</td><td>${chg(m.change, m.cur, m.prev)}</td>
+      <td>${amt(m.ytd)}</td><td>${amt(m.all)}</td>
+    </tr>`).join('');
+  const by = view.key === 'all' ? 'หมวด (กดแถวเพื่อเจาะดู)' : 'หมวดย่อย';
+  el.innerHTML = `
+    <div class="sub-h">แยกตาม${by}</div>
+    <div class="table-scroll"><table class="grid members">
+      <thead><tr><th class="l"></th><th>${R.cur_label}</th><th>${R.prev_label}</th><th>เปลี่ยน</th><th>${R.ytd_label}</th><th>ทั้งหมด</th></tr></thead>
+      <tbody>${rows}
+        <tr class="total"><td class="l">รวม</td><td class="cur">${fmt(t.cur)}</td><td>${fmt(t.prev)}</td>
+          <td>${chg(t.change, t.cur, t.prev)}</td><td>${fmt(t.ytd)}</td><td>${fmt(t.all)}</td></tr>
+      </tbody>
+    </table></div>`;
+  el.querySelectorAll('tr.link').forEach(tr => {
+    tr.onclick = () => selectView(view.members[tr.dataset.idx].link, true);
+  });
+}
+
+const TXN_PREVIEW = 10;
+function renderTxns(view, showAll = false) {
+  const el = document.getElementById('f-txns');
+  const txns = view.txns;
+  if (!txns.length) {
+    el.innerHTML = `<div class="sub-h">รายการใน ${R.cur_label}</div><div class="empty">ไม่มีรายการในเดือนนี้</div>`;
+    return;
+  }
+  const showCat = view.members.length > 1;
+  const shown = showAll ? txns : txns.slice(0, TXN_PREVIEW);
+  const rows = shown.map(t => {
+    const d = t.date.slice(8, 10) + '/' + t.date.slice(5, 7);
+    const dateCell = IS_ADMIN ? `<a href="/transactions/${t.id}/edit">${d}</a>` : d;
+    return `<tr><td class="l">${dateCell}</td><td class="l wrap">${t.receiver ? esc(t.receiver) : '<span class="zero">–</span>'}</td>
+      <td class="l wrap memo">${esc(t.memo)}</td>${showCat ? `<td class="l wrap cat">${esc(t.category)}</td>` : ''}
+      <td class="cur">${fmt(t.amount)}</td></tr>`;
+  }).join('');
+  el.innerHTML = `
+    <div class="sub-h">รายการใน ${R.cur_label} (${txns.length} รายการ)</div>
+    <div class="table-scroll" style="margin-bottom:0"><table class="grid txns">
+      <thead><tr><th class="l">วันที่</th><th class="l">ผู้รับ</th><th class="l">รายละเอียด</th>${showCat ? '<th class="l">หมวด</th>' : ''}<th>ยอด</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table></div>
+    ${!showAll && txns.length > TXN_PREVIEW ? `<button type="button" class="more-btn" id="more-txns">ดูทั้งหมด ${txns.length} รายการ</button>` : ''}`;
+  const more = document.getElementById('more-txns');
+  if (more) more.onclick = () => renderTxns(view, true);
+}
+
+function withFocus(href, key) {
+  const u = new URL(href, location.href);
+  if (key === 'all') u.searchParams.delete('focus'); else u.searchParams.set('focus', key);
+  return u.pathname + u.search;
+}
+
+function selectView(key, scroll = false) {
+  const view = R.views.find(v => v.key === key) || R.views[0];
+  document.querySelectorAll('#focus-chips button').forEach(b => b.classList.toggle('active', b.dataset.key === view.key));
+  document.getElementById('f-title').textContent = view.label;
+  renderStats(view);
+  renderChart(view);
+  renderMembers(view);
+  renderTxns(view);
+
+  // Keep the chosen view in the URL and on the month links, so switching months stays on it.
+  history.replaceState(null, '', withFocus(location.href, view.key));
+  document.querySelectorAll('.month-nav a').forEach(a => { a.href = withFocus(a.href, view.key); });
+  currentFocus = view.key;
+  if (scroll) document.getElementById('f-title').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+let currentFocus = 'all';
+const chips = document.getElementById('focus-chips');
+R.views.forEach(v => {
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.dataset.key = v.key;
+  b.textContent = v.label;
+  if (!v.key.startsWith('g:')) b.classList.add('overview');
+  b.onclick = () => selectView(v.key);
+  chips.appendChild(b);
+});
+selectView({{ focus|tojson }});
 </script>
-{% endif %}
 </body>
 </html>

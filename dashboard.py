@@ -11,7 +11,7 @@ import json
 import os
 import uuid
 from collections import defaultdict
-from datetime import date, time
+from datetime import date, datetime, time, timedelta, timezone
 from pathlib import Path
 
 import bcrypt
@@ -48,6 +48,7 @@ THAI_MONTHS = {
 app = FastAPI()
 app.add_middleware(SessionMiddleware, secret_key=SESSION_SECRET, same_site="lax")
 templates = Jinja2Templates(directory="templates")
+templates.env.filters["baht"] = lambda v: f"{v:,.2f}"
 
 
 def db():
@@ -411,30 +412,189 @@ def fetch_report_data_custom(cur, date_from, date_to):
     }
 
 
+BANGKOK_TZ = timezone(timedelta(hours=7))
+UNCATEGORIZED = "ไม่ระบุหมวด"
+PERIOD_KEYS = ("cur", "prev", "ytd", "all")
+
+
+def _month_bounds(y, m):
+    start = date(y, m, 1)
+    next_start = date(y + 1, 1, 1) if m == 12 else date(y, m + 1, 1)
+    return start, next_start - timedelta(days=1)
+
+
+def _shift_month(y, m, delta):
+    idx = y * 12 + (m - 1) + delta
+    return idx // 12, idx % 12 + 1
+
+
+def _month_label(y, m):
+    return f"{THAI_MONTHS[m]} {y}"
+
+
+def _pct_change(cur, prev):
+    if not prev:
+        return None
+    return (cur - prev) / prev * 100
+
+
+def fetch_overview(cur, y, m):
+    """Everything the /reports overview needs, anchored on month (y, m):
+    month KPIs, top payees, and one drill-down "view" per category group (plus an
+    all-expenses view). Each view carries its members'
+    this-month / last-month / year-to-date / all-time totals, a 12-month trend,
+    and this month's transactions, so the page can switch views client-side."""
+    cur_from, cur_to = _month_bounds(y, m)
+    prev_from, prev_to = _month_bounds(*_shift_month(y, m, -1))
+    ytd_from = date(y, 1, 1)
+    trend_from = _month_bounds(*_shift_month(y, m, -11))[0]
+
+    categories = get_categories(cur)
+    cat_order = {c["name"]: i for i, c in enumerate(categories)}
+    cat_group = {c["name"]: c["group_name"] or c["name"] for c in categories}
+
+    cur.execute(
+        """SELECT COALESCE(category, %(unc)s),
+                  COALESCE(SUM(amount) FILTER (WHERE txn_date BETWEEN %(cf)s AND %(ct)s), 0),
+                  COALESCE(SUM(amount) FILTER (WHERE txn_date BETWEEN %(pf)s AND %(pt)s), 0),
+                  COALESCE(SUM(amount) FILTER (WHERE txn_date BETWEEN %(yf)s AND %(ct)s), 0),
+                  COALESCE(SUM(amount), 0)
+           FROM slip_transactions
+           WHERE direction = 'expense'
+           GROUP BY 1""",
+        {"unc": UNCATEGORIZED, "cf": cur_from, "ct": cur_to, "pf": prev_from, "pt": prev_to, "yf": ytd_from},
+    )
+    cat_amounts = {r[0]: dict(zip(PERIOD_KEYS, map(float, r[1:]))) for r in cur.fetchall()}
+
+    months = [_shift_month(y, m, -i) for i in range(11, -1, -1)]
+    month_keys = [f"{my:04d}-{mm:02d}" for my, mm in months]
+    cur.execute(
+        """SELECT to_char(txn_date, 'YYYY-MM'), COALESCE(category, %s), SUM(amount)
+           FROM slip_transactions
+           WHERE direction = 'expense' AND txn_date BETWEEN %s AND %s
+           GROUP BY 1, 2""",
+        (UNCATEGORIZED, trend_from, cur_to),
+    )
+    trend_by_cat = defaultdict(lambda: [0.0] * len(month_keys))
+    for mk, cat, total in cur.fetchall():
+        trend_by_cat[cat][month_keys.index(mk)] = float(total)
+
+    # Monthly average only counts months since the ledger started, so a young ledger
+    # isn't diluted by empty months before the first slip.
+    cur.execute("SELECT to_char(MIN(txn_date), 'YYYY-MM') FROM slip_transactions")
+    first_key = cur.fetchone()[0] or month_keys[-1]
+    avg_months = sum(1 for k in month_keys if k >= first_key) or 1
+
+    cur.execute(
+        """SELECT id, txn_date, COALESCE(category, %s), receiver_name, memo, amount
+           FROM slip_transactions
+           WHERE direction = 'expense' AND txn_date BETWEEN %s AND %s
+           ORDER BY txn_date DESC, txn_time DESC NULLS LAST, id DESC""",
+        (UNCATEGORIZED, cur_from, cur_to),
+    )
+    month_txns = [
+        {"id": r[0], "date": r[1].isoformat(), "category": r[2], "receiver": r[3] or "", "memo": r[4] or "",
+         "amount": float(r[5])}
+        for r in cur.fetchall()
+    ]
+
+    def build_view(key, label, cats, member_of, link_members=False):
+        cats = sorted(cats, key=lambda n: cat_order.get(n, len(cat_order)))
+        members = {}
+        for c in cats:
+            name = member_of(c)
+            mbr = members.setdefault(
+                name, {"name": name, "trend": [0.0] * len(month_keys), **{k: 0.0 for k in PERIOD_KEYS}}
+            )
+            for k in PERIOD_KEYS:
+                mbr[k] += cat_amounts[c][k]
+            mbr["trend"] = [a + b for a, b in zip(mbr["trend"], trend_by_cat.get(c, mbr["trend"]))]
+        total = {k: sum(mb[k] for mb in members.values()) for k in PERIOD_KEYS}
+        total["change"] = _pct_change(total["cur"], total["prev"])
+        total["avg"] = sum(sum(mb["trend"]) for mb in members.values()) / avg_months
+        for mb in members.values():
+            mb["change"] = _pct_change(mb["cur"], mb["prev"])
+            mb["link"] = f"g:{mb['name']}" if link_members else None
+        cat_set = set(cats)
+        return {
+            "key": key, "label": label, "total": total,
+            "members": sorted(members.values(), key=lambda mb: (-mb["cur"], -mb["all"])),
+            "txns": [t for t in month_txns if t["category"] in cat_set],
+        }
+
+    all_cats = list(cat_amounts)
+    views = [build_view("all", "รายจ่ายทั้งหมด", all_cats, lambda c: cat_group.get(c, c), link_members=True)]
+    group_views = []
+    for gname in {cat_group.get(c, c) for c in all_cats}:
+        group_views.append(build_view(
+            f"g:{gname}", gname, [c for c in all_cats if cat_group.get(c, c) == gname], lambda c: c,
+        ))
+    views += sorted(group_views, key=lambda v: -v["total"]["all"])
+
+    cur.execute(
+        """SELECT COALESCE(SUM(amount) FILTER (WHERE direction = 'expense' AND txn_date BETWEEN %(cf)s AND %(ct)s), 0),
+                  COALESCE(SUM(amount) FILTER (WHERE direction = 'income' AND txn_date BETWEEN %(cf)s AND %(ct)s), 0),
+                  COALESCE(SUM(amount) FILTER (WHERE direction = 'expense' AND txn_date BETWEEN %(pf)s AND %(pt)s), 0),
+                  COALESCE(SUM(amount) FILTER (WHERE direction = 'income' AND txn_date BETWEEN %(pf)s AND %(pt)s), 0),
+                  COUNT(*) FILTER (WHERE direction = 'unknown' AND txn_date BETWEEN %(cf)s AND %(ct)s),
+                  COALESCE(SUM(amount) FILTER (WHERE direction = 'unknown' AND txn_date BETWEEN %(cf)s AND %(ct)s), 0),
+                  COUNT(*) FILTER (WHERE direction = 'expense' AND txn_date BETWEEN %(cf)s AND %(ct)s)
+           FROM slip_transactions""",
+        {"cf": cur_from, "ct": cur_to, "pf": prev_from, "pt": prev_to},
+    )
+    exp_cur, inc_cur, exp_prev, inc_prev, unknown_count, unknown_total, expense_count = cur.fetchone()
+    exp_cur, inc_cur, exp_prev, inc_prev = map(float, (exp_cur, inc_cur, exp_prev, inc_prev))
+    kpis = {
+        "expense": exp_cur, "income": inc_cur, "net": inc_cur - exp_cur,
+        "expense_prev": exp_prev, "income_prev": inc_prev, "net_prev": inc_prev - exp_prev,
+        "expense_change": _pct_change(exp_cur, exp_prev), "income_change": _pct_change(inc_cur, inc_prev),
+        "expense_count": expense_count,
+        "unknown_count": unknown_count, "unknown_total": float(unknown_total),
+    }
+
+    cur.execute(
+        """SELECT COALESCE(receiver_name, 'ไม่ระบุ'), SUM(amount), COUNT(*)
+           FROM slip_transactions
+           WHERE direction = 'expense' AND txn_date BETWEEN %s AND %s
+           GROUP BY 1 ORDER BY 2 DESC LIMIT 5""",
+        (cur_from, cur_to),
+    )
+    top_payees = [{"name": r[0], "total": float(r[1]), "count": r[2]} for r in cur.fetchall()]
+
+    return {
+        "cur_from": cur_from, "cur_to": cur_to,
+        "cur_label": _month_label(y, m), "prev_label": _month_label(*_shift_month(y, m, -1)),
+        "ytd_label": f"ปี {y}",
+        "month_labels": [f"{THAI_MONTHS[mm]} {str(my)[2:]}" for my, mm in months],
+        "avg_months": avg_months, "views": views,
+        "kpis": kpis, "top_payees": top_payees,
+    }
+
+
 @app.get("/reports")
-def reports(
-    request: Request, granularity: str = "month", year: int = 0, month: int = 0, day: int = 0,
-    date_from: str = "", date_to: str = "",
-):
+def reports(request: Request, month: str = "", focus: str = "all"):
     redirect = require_login(request)
     if redirect:
         return redirect
 
-    custom_mode = bool(date_from and date_to)
+    today = datetime.now(BANGKOK_TZ).date()
+    try:
+        y, m = (int(p) for p in month.split("-"))
+        date(y, m, 1)
+    except ValueError:
+        y, m = today.year, today.month
+
     conn = db()
     try:
         with conn.cursor() as cur:
-            data = fetch_report_data(cur, granularity, year, month, day)
-            if custom_mode:
-                data.update(fetch_report_data_custom(cur, date_from, date_to))
-            category_groups = {c["name"]: c["group_name"] for c in get_categories(cur)}
+            cur.execute(
+                """SELECT DISTINCT EXTRACT(year FROM txn_date)::int, EXTRACT(month FROM txn_date)::int
+                   FROM slip_transactions WHERE txn_date IS NOT NULL"""
+            )
+            month_opts = set(cur.fetchall()) | {(today.year, today.month), (y, m)}
+            data = fetch_overview(cur, y, m)
     finally:
         conn.close()
-
-    category_chart = {
-        "labels": [c["name"] for c in data["category_rows"]],
-        "amounts": [c["total"] for c in data["category_rows"]],
-    }
 
     return templates.TemplateResponse(
         request,
@@ -442,25 +602,19 @@ def reports(
         {
             "user": request.session.get("user"),
             "role": request.session.get("role"),
-            "monthly_chart": json.dumps(data["bucket_chart"]),
-            "category_chart": json.dumps(category_chart),
-            "category_groups": json.dumps(category_groups, ensure_ascii=False),
-            "total_expense": data["total_expense"],
-            "total_income": data["total_income"],
-            "net": data["net"],
-            "top_payees": data["top_payees"],
-            "years": data["years"],
-            "months": data["months"],
-            "days": data["days"],
-            "selected_year": data["year"],
-            "selected_month": data["month"],
-            "selected_day": data["day"],
-            "granularity": data["granularity"],
-            "period_label": data["period_label"],
-            "thai_months": THAI_MONTHS,
-            "custom_mode": custom_mode,
-            "date_from": date_from,
-            "date_to": date_to,
+            "selected_month": f"{y:04d}-{m:02d}",
+            "month_options": [
+                {"value": f"{oy:04d}-{om:02d}", "label": _month_label(oy, om)}
+                for oy, om in sorted(month_opts, reverse=True)
+            ],
+            "focus": focus,
+            # Embedded in a <script> tag and carries free-text memos — escape "<" so a
+            # memo containing "</script>" can't break out of it.
+            "report_json": json.dumps(
+                {k: data[k] for k in ("views", "month_labels", "avg_months", "cur_label", "prev_label", "ytd_label")},
+                ensure_ascii=False,
+            ).replace("<", "\\u003c"),
+            **data,
         },
     )
 
