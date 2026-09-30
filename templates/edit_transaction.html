@@ -1,146 +1,151 @@
-<!DOCTYPE html>
-<html lang="th">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>แก้ไขรายการ</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
+{% extends "base.html" %}
+{% from "_icons.html" import icon %}
+{% block title %}{% if txn.id %}แก้ไขรายการ #{{ txn.id }}{% else %}เพิ่มรายการ{% endif %} · บัญชีรายจ่าย{% endblock %}
+{% block head %}
 <style>
-  * { box-sizing: border-box; }
-  body { font-family: "Sarabun", sans-serif; background: #eef1f5; margin: 0; color: #1c2833; }
-  header {
-    background: linear-gradient(120deg, #1e2a38, #2c3e50 60%, #34495e);
-    color: white; padding: 18px 32px; display: flex; justify-content: space-between; align-items: center;
-    box-shadow: 0 2px 12px rgba(0,0,0,0.15);
+  .crumb { display: inline-flex; align-items: center; gap: 4px; color: var(--muted); text-decoration: none; font-size: 13px; font-weight: 500; margin-bottom: 8px; }
+  .crumb:hover { color: var(--text); }
+  .crumb .icon { width: 16px; height: 16px; }
+  .edit-grid { display: grid; grid-template-columns: minmax(260px, 380px) minmax(0, 1fr); gap: 20px; align-items: start; }
+  .slip-card { padding: 12px; position: sticky; top: 20px; }
+  .slip-card img { display: block; width: 100%; max-height: 70vh; object-fit: contain; border-radius: 8px; background: var(--surface-2); }
+  .slip-card img[hidden] { display: none; }
+  .slip-card .none { padding: 48px 16px; text-align: center; color: var(--faint); border: 1px dashed var(--border-strong); border-radius: 8px; font-size: 13px; }
+  .slip-card .upload { margin-top: 12px; }
+  .slip-card .upload label { display: block; font-size: 12px; font-weight: 600; color: var(--muted); margin-bottom: 4px; }
+  .form-card { padding: 0; }
+  .form-section { padding: 18px 20px; border-bottom: 1px solid var(--border); }
+  .form-section h2 { font-size: 13px; font-weight: 700; color: var(--muted); margin: 0 0 12px; }
+  .fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 14px; }
+  .fields .full { grid-column: 1 / -1; }
+  .f label { display: block; font-size: 12px; font-weight: 600; color: var(--text-2); margin-bottom: 4px; }
+  .f label .opt { color: var(--faint); font-weight: 500; }
+  .f input, .f select {
+    width: 100%; padding: 8px 10px; border: 1px solid var(--border-strong); border-radius: 8px; background: var(--surface); outline: none;
   }
-  header h1 { font-size: 17px; margin: 0; font-weight: 600; }
-  header .role-pill {
-    font-size: 11px; padding: 2px 10px; border-radius: 10px; margin-left: 8px;
-    background: rgba(255,255,255,0.15); color: #cdd9e5; vertical-align: middle;
-  }
-  header a { color: #cdd9e5; text-decoration: none; font-size: 13px; padding: 6px 12px; border-radius: 6px; transition: background .15s; }
-  header a:hover { color: white; background: rgba(255,255,255,0.1); }
-  main { padding: 28px 32px; max-width: 1040px; margin: 0 auto; display: flex; gap: 24px; align-items: flex-start; }
-  .preview { flex: 1; background: white; border-radius: 12px; padding: 18px; box-shadow: 0 2px 10px rgba(0,0,0,0.06); position: sticky; top: 28px; }
-  .preview img { width: 100%; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
-  .preview .no-img { padding: 40px 10px; text-align: center; color: #aab2ba; font-size: 13px; background: #f7f8fa; border-radius: 8px; }
-  .form-wrap { flex: 1; background: white; border-radius: 12px; padding: 22px; box-shadow: 0 2px 10px rgba(0,0,0,0.06); }
-  label { display: block; font-size: 12px; color: #666; margin: 12px 0 4px; font-weight: 500; }
-  input, select {
-    width: 100%; padding: 9px 11px; border: 1.5px solid #e1e5e9; border-radius: 8px;
-    font-size: 14px; font-family: inherit; transition: border-color .15s;
-  }
-  input:focus, select:focus { outline: none; border-color: #2c70c9; }
-  .row { display: flex; gap: 12px; }
-  .row > div { flex: 1; }
-  .btn-row { display: flex; gap: 10px; margin-top: 22px; }
-  .btn-row button, .btn-row a {
-    flex: 1; padding: 11px; border: none; border-radius: 8px; font-size: 14px; font-weight: 600;
-    cursor: pointer; text-align: center; text-decoration: none; transition: background .15s;
-  }
-  .btn-save { background: #2c70c9; color: white; box-shadow: 0 2px 8px rgba(44,112,201,0.3); }
-  .btn-save:hover { background: #235ba3; }
-  .btn-cancel { background: #eef1f3; color: #555; }
-  .btn-cancel:hover { background: #dde2e6; }
-  .home-btn {
-    display: inline-block; margin-bottom: 16px; padding: 6px 14px; font-size: 13px; color: #2c70c9;
-    text-decoration: none; border: 1.5px solid #cdd9e5; border-radius: 8px; transition: background .15s;
-  }
-  .home-btn:hover { background: #eef1f3; }
-  @media (max-width: 768px) {
-    main { flex-direction: column; padding: 16px; gap: 16px; }
-    .preview { position: static; width: 100%; }
-    header { padding: 14px 16px; }
+  .f input:focus, .f select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+  .f .help { font-size: 12px; color: var(--muted); margin-top: 4px; }
+  .amount-input { position: relative; }
+  .amount-input input { font-size: 18px; font-weight: 700; padding-right: 44px; }
+  .amount-input span { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); color: var(--muted); font-size: 13px; }
+  .form-foot { display: flex; justify-content: flex-end; gap: 8px; padding: 14px 20px; background: var(--surface-2); border-radius: 0 0 var(--radius-lg) var(--radius-lg); }
+  @media (max-width: 899px) {
+    .edit-grid { grid-template-columns: 1fr; }
+    .slip-card { position: static; }
+    .slip-card img { max-height: 320px; }
+    .fields { grid-template-columns: 1fr; }
+    .form-section { padding: 16px; }
+    .form-foot { position: sticky; bottom: calc(56px + env(safe-area-inset-bottom)); }
   }
 </style>
-</head>
-<body>
-<header>
-  <h1>{% if txn.id %}แก้ไขรายการ #{{ txn.id }}{% else %}เพิ่มรายการใหม่{% endif %}<span class="role-pill">{{ user }} · {{ "ผู้ดูแล" if role == "admin" else "ผู้เยี่ยมชม" }}</span></h1>
-  <a href="/logout">ออกจากระบบ</a>
-</header>
-<main>
-  <div class="preview">
-    <a class="home-btn" href="/">&larr; หน้าแรก</a>
+{% endblock %}
+{% block content %}
+<a class="crumb" href="/">{{ icon('left') }}รายการ</a>
+<div class="page-head">
+  <h1>{% if txn.id %}แก้ไขรายการ #{{ txn.id }}{% else %}เพิ่มรายการ{% endif %}</h1>
+</div>
+<form method="post" action="{{ form_action }}" enctype="multipart/form-data" class="edit-grid">
+  <div class="card slip-card">
     {% if txn.raw_file_id %}
-    <img src="/files/{{ txn.raw_file_id }}" alt="สลิป">
+    <a href="/files/{{ txn.raw_file_id }}" target="_blank" rel="noopener" title="เปิดรูปเต็ม"><img src="/files/{{ txn.raw_file_id }}" alt="สลิป"></a>
     {% else %}
-    <div class="no-img">ไม่มีรูปอ้างอิง<br>(รายการกรอกมือ)</div>
+    <div class="none" id="no-img">ไม่มีรูปสลิป<br>(รายการกรอกมือ)</div>
+    <img id="preview" alt="ตัวอย่างรูปที่แนบ" hidden>
+    <div class="upload f">
+      <label for="photo">แนบรูปสลิป <span class="opt">(ถ้ามี)</span></label>
+      <input type="file" id="photo" name="photo" accept="image/*">
+    </div>
     {% endif %}
   </div>
-  <div class="form-wrap">
-    <form method="post" action="{{ form_action }}" enctype="multipart/form-data">
-      {% if not txn.raw_file_id %}
-      <label>แนบรูปสลิป (ถ้ามี)</label>
-      <input type="file" name="photo" accept="image/*">
-      {% endif %}
 
-      <label>ธนาคาร</label>
-      <input name="bank" value="{{ txn.bank or '' }}">
-
-      <div class="row">
-        <div>
-          <label>วันที่</label>
-          <input type="date" name="txn_date" value="{{ txn.txn_date }}" required>
+  <div class="card form-card">
+    <div class="form-section">
+      <h2>ยอดและเวลา</h2>
+      <div class="fields">
+        <div class="f">
+          <label for="amount">ยอดเงิน</label>
+          <div class="amount-input"><input type="number" step="0.01" min="0" id="amount" name="amount" value="{{ txn.amount }}" required inputmode="decimal"><span>บาท</span></div>
         </div>
-        <div>
-          <label>เวลา</label>
-          <input type="time" name="txn_time" value="{{ txn.txn_time }}" required>
+        <div class="f">
+          <label for="fee">ค่าธรรมเนียม <span class="opt">(ถ้ามี)</span></label>
+          <input type="number" step="0.01" min="0" id="fee" name="fee" value="{{ txn.fee or 0 }}" inputmode="decimal">
         </div>
-      </div>
-
-      <div class="row">
-        <div>
-          <label>ยอดเงิน</label>
-          <input type="number" step="0.01" name="amount" value="{{ txn.amount }}" required>
+        <div class="f">
+          <label for="txn_date">วันที่</label>
+          <input type="date" id="txn_date" name="txn_date" value="{{ txn.txn_date }}" required>
         </div>
-        <div>
-          <label>ค่าธรรมเนียม</label>
-          <input type="number" step="0.01" name="fee" value="{{ txn.fee or 0 }}">
+        <div class="f">
+          <label for="txn_time">เวลา</label>
+          <input type="time" id="txn_time" name="txn_time" value="{{ txn.txn_time }}" required>
         </div>
       </div>
+    </div>
 
-      <label>ประเภท</label>
-      <select name="direction">
-        <option value="expense" {% if txn.direction != 'income' %}selected{% endif %}>รายจ่าย</option>
-        <option value="income" {% if txn.direction == 'income' %}selected{% endif %}>รายรับ</option>
-        <option value="unknown">ไม่ทราบ</option>
-      </select>
-
-      <label>หมวด</label>
-      <select name="category">
-        <option value="">-- ไม่ระบุ --</option>
-        {% for c in categories %}
-        <option value="{{ c }}" {% if txn.category == c %}selected{% endif %}>{{ c }}</option>
-        {% endfor %}
-      </select>
-
-      <label>ผู้โอน</label>
-      <input name="sender_name" value="{{ txn.sender_name or '' }}">
-      <label>เลขบัญชีผู้โอน</label>
-      <input name="sender_account" value="{{ txn.sender_account or '' }}">
-
-      <label>ผู้รับ</label>
-      <input name="receiver_name" value="{{ txn.receiver_name or '' }}">
-      <label>เลขบัญชีผู้รับ</label>
-      <input name="receiver_account" value="{{ txn.receiver_account or '' }}">
-
-      <label>รายละเอียด</label>
-      <input name="memo" value="{{ txn.memo or '' }}">
-
-      <label>สถานะ</label>
-      <select name="status">
-        <option value="pending_review" {% if txn.status == 'pending_review' %}selected{% endif %}>ยังไม่ตรวจ</option>
-        <option value="reviewed" {% if txn.status == 'reviewed' %}selected{% endif %}>ตรวจแล้ว</option>
-      </select>
-
-      <div class="btn-row">
-        <a class="btn-cancel" href="/">ยกเลิก</a>
-        <button type="submit" class="btn-save">{% if txn.id %}บันทึก{% else %}เพิ่มรายการ{% endif %}</button>
+    <div class="form-section">
+      <h2>จัดหมวด</h2>
+      <div class="fields">
+        <div class="f full">
+          <label for="memo">รายละเอียด</label>
+          <input id="memo" name="memo" value="{{ txn.memo or '' }}" placeholder="เช่น เติมน้ำมัน Vigo, ซื้อของงานติดกล้อง">
+        </div>
+        <div class="f">
+          <label for="category">หมวด</label>
+          <select id="category" name="category">
+            <option value="">— ไม่ระบุ —</option>
+            {% for c in categories %}
+            <option value="{{ c }}" {% if txn.category == c %}selected{% endif %}>{{ c }}</option>
+            {% endfor %}
+          </select>
+          {% if not txn.id %}<div class="help">เว้นว่างได้ ระบบจะเดาหมวดจากรายละเอียดให้</div>{% endif %}
+        </div>
+        <div class="f">
+          <label for="direction">ประเภท</label>
+          <select id="direction" name="direction">
+            <option value="expense" {% if txn.direction not in ('income', 'unknown') %}selected{% endif %}>รายจ่าย</option>
+            <option value="unknown" {% if txn.direction == 'unknown' %}selected{% endif %}>ไม่ระบุ</option>
+            {% if txn.direction == 'income' %}<option value="income" selected>รายรับ</option>{% endif %}
+          </select>
+        </div>
       </div>
-    </form>
+    </div>
+
+    <div class="form-section">
+      <h2>ผู้โอน / ผู้รับ</h2>
+      <div class="fields">
+        <div class="f"><label for="receiver_name">ผู้รับ</label><input id="receiver_name" name="receiver_name" value="{{ txn.receiver_name or '' }}"></div>
+        <div class="f"><label for="receiver_account">เลขบัญชีผู้รับ</label><input id="receiver_account" name="receiver_account" value="{{ txn.receiver_account or '' }}"></div>
+        <div class="f"><label for="sender_name">ผู้โอน</label><input id="sender_name" name="sender_name" value="{{ txn.sender_name or '' }}"></div>
+        <div class="f"><label for="sender_account">เลขบัญชีผู้โอน</label><input id="sender_account" name="sender_account" value="{{ txn.sender_account or '' }}"></div>
+        <div class="f"><label for="bank">ธนาคาร</label><input id="bank" name="bank" value="{{ txn.bank or '' }}"></div>
+        <div class="f">
+          <label for="status">สถานะตรวจ</label>
+          <select id="status" name="status">
+            <option value="pending_review" {% if txn.status == 'pending_review' %}selected{% endif %}>ยังไม่ตรวจ</option>
+            <option value="reviewed" {% if txn.status == 'reviewed' %}selected{% endif %}>ตรวจแล้ว</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <div class="form-foot">
+      <a class="btn" href="/">ยกเลิก</a>
+      <button type="submit" class="btn btn-primary">{% if txn.id %}บันทึกการแก้ไข{% else %}เพิ่มรายการ{% endif %}</button>
+    </div>
   </div>
-</main>
-</body>
-</html>
+</form>
+{% endblock %}
+{% block fab %}{% endblock %}
+{% block scripts %}
+<script>
+const photo = document.getElementById('photo');
+if (photo) {
+  photo.addEventListener('change', () => {
+    const file = photo.files[0];
+    const img = document.getElementById('preview');
+    document.getElementById('no-img').hidden = !!file;
+    img.hidden = !file;
+    if (file) img.src = URL.createObjectURL(file);
+  });
+}
+</script>
+{% endblock %}

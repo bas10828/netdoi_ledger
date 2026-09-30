@@ -1,175 +1,113 @@
-<!DOCTYPE html>
-<html lang="th">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>กราฟและสถิติ</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
+{% extends "base.html" %}
+{% from "_icons.html" import icon %}
+{% block title %}ภาพรวม · บัญชีรายจ่าย{% endblock %}
+{% block head %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
 <style>
-  * { box-sizing: border-box; }
-  body { font-family: "Sarabun", sans-serif; background: #eef1f5; margin: 0; color: #1c2833; }
-  header {
-    background: linear-gradient(120deg, #1e2a38, #2c3e50 60%, #34495e);
-    color: white; padding: 18px 32px; display: flex; justify-content: space-between; align-items: center;
-    box-shadow: 0 2px 12px rgba(0,0,0,0.15);
-  }
-  header .title { display: flex; align-items: center; gap: 10px; }
-  header .badge-icon {
-    width: 30px; height: 30px; border-radius: 8px; background: rgba(255,255,255,0.15);
-    display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 14px;
-  }
-  header h1 { font-size: 17px; margin: 0; font-weight: 600; }
-  header .role-pill {
-    font-size: 11px; padding: 2px 10px; border-radius: 10px; margin-left: 8px;
-    background: rgba(255,255,255,0.15); color: #cdd9e5; vertical-align: middle;
-  }
-  header a { color: #cdd9e5; text-decoration: none; font-size: 13px; padding: 6px 12px; border-radius: 6px; }
-  header a:hover { color: white; background: rgba(255,255,255,0.1); }
-  main { padding: 24px 32px 48px; max-width: 1400px; margin: 0 auto; }
-
-  /* Toolbar */
-  .toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
-  .back-link { color: #2c70c9; text-decoration: none; font-size: 13px; font-weight: 600; margin-right: auto; }
-  .back-link:hover { text-decoration: underline; }
-  .month-nav { display: flex; align-items: center; background: white; border-radius: 10px; box-shadow: 0 1px 4px rgba(0,0,0,0.06); }
-  .month-nav a, .month-nav span.nav-disabled {
-    padding: 8px 14px; font-size: 16px; font-weight: 700; color: #2c3e50; text-decoration: none; line-height: 1;
-  }
-  .month-nav a:hover { background: #f0f2f5; }
-  .month-nav span.nav-disabled { color: #d0d5db; }
+  .month-nav { display: flex; align-items: center; background: var(--surface); border: 1px solid var(--border-strong); border-radius: 8px; box-shadow: var(--shadow-sm); overflow: hidden; }
+  .month-nav a, .month-nav span.nav-disabled { display: grid; place-items: center; width: 34px; height: 34px; color: var(--text-2); text-decoration: none; }
+  .month-nav a:hover { background: var(--surface-2); color: var(--text); }
+  .month-nav span.nav-disabled { color: var(--border-strong); }
   .month-nav select {
-    border: none; border-left: 1px solid #eef1f5; border-right: 1px solid #eef1f5;
-    padding: 8px 12px; font-size: 15px; font-weight: 700; font-family: inherit; background: white; color: #1c2833; cursor: pointer;
+    border: none; border-left: 1px solid var(--border); border-right: 1px solid var(--border);
+    padding: 0 12px; height: 34px; font-weight: 700; background: var(--surface); cursor: pointer; outline: none;
   }
-  .btn {
-    padding: 9px 16px; border: none; border-radius: 8px; font-size: 13px; font-weight: 600;
-    cursor: pointer; font-family: inherit; background: #1e8449; color: white;
-  }
-  .btn:hover { background: #186a3a; }
-  .export-dropdown { position: relative; }
-  .export-menu {
-    display: none; position: absolute; top: calc(100% + 6px); right: 0; z-index: 10;
-    background: white; border-radius: 10px; box-shadow: 0 6px 20px rgba(0,0,0,0.16); padding: 12px; width: 280px;
-  }
-  .export-menu.open { display: block; }
-  .export-menu h4 { margin: 0 0 8px; font-size: 12px; color: #6b7785; font-weight: 600; }
-  .export-menu .row { display: flex; gap: 8px; margin-bottom: 12px; }
-  .export-menu .row:last-child { margin-bottom: 0; }
-  .export-menu .row button { flex: 1; }
-  .export-menu input[type=date] {
-    flex: 1; min-width: 0; padding: 6px 8px; border: 1px solid #e6e9ec; border-radius: 6px; font-family: inherit; font-size: 12px;
-  }
-  .btn-ghost { background: #f0f2f5; color: #1c2833; }
-  .btn-ghost:hover { background: #e2e6ea; }
+  .export-pop { width: 260px; padding: 12px; }
+  .export-pop h4 { margin: 0 0 6px; font-size: 12px; color: var(--muted); font-weight: 600; }
+  .export-pop .r { display: flex; gap: 6px; margin-bottom: 12px; }
+  .export-pop .r:last-child { margin-bottom: 0; }
+  .export-pop .r .btn { flex: 1; justify-content: center; }
+  .export-pop input[type=date] { flex: 1; min-width: 0; padding: 6px 8px; border: 1px solid var(--border-strong); border-radius: 6px; font-size: 12px; }
 
-  /* Sections */
-  .section { background: white; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.06); padding: 20px 22px; margin-bottom: 18px; }
+  .section { padding: 20px 22px; margin-bottom: 16px; }
   .section-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
   .section h2 { font-size: 16px; margin: 0; font-weight: 700; }
-  .section .hint { font-size: 12px; color: #97a3ad; }
+  .section .hint { font-size: 12px; color: var(--muted); }
 
-  /* KPI cards */
-  .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 18px; }
-  .kpi { background: white; border-radius: 12px; padding: 16px 18px; box-shadow: 0 2px 10px rgba(0,0,0,0.06); border-top: 4px solid #d6dbe1; }
-  .kpi.k-expense { border-top-color: #c0392b; }
-  .kpi.k-income { border-top-color: #1e8449; }
-  .kpi.k-net { border-top-color: #2c70c9; }
-  .kpi.k-car { border-top-color: #eda100; }
-  .kpi .label { font-size: 13px; color: #6b7785; font-weight: 600; }
-  .kpi .value { font-size: 24px; font-weight: 700; margin: 4px 0 6px; font-variant-numeric: tabular-nums; }
-  .kpi .sub { font-size: 12px; color: #97a3ad; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
-  .notice {
-    background: #fff8ec; border: 1px solid #f5d9a8; color: #8a5a00; border-radius: 10px;
-    padding: 10px 14px; font-size: 13px; margin-bottom: 18px;
-  }
-  .notice a { color: #8a5a00; font-weight: 600; }
+  .kpis { display: grid; grid-template-columns: repeat(4, 1fr); margin-bottom: 16px; overflow: hidden; }
+  .kpi { padding: 16px 18px; border-right: 1px solid var(--border); min-width: 0; }
+  .kpi:last-child { border-right: none; }
+  .kpi .label { font-size: 12px; color: var(--muted); font-weight: 600; }
+  .kpi .value { font-size: 22px; font-weight: 700; margin: 2px 0 4px; letter-spacing: -.01em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .kpi .value.expense { color: var(--expense); }
+  .kpi .value.small { font-size: 16px; line-height: 1.6; }
+  .kpi .sub { font-size: 12px; color: var(--muted); display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+  .notice { background: var(--warn-soft); border: 1px solid #f6d9ae; color: var(--warn); border-radius: var(--radius); padding: 10px 14px; font-size: 13px; margin-bottom: 16px; }
+  .notice a { color: var(--warn); font-weight: 600; }
 
-  /* Change badge */
   .chg { font-size: 12px; font-weight: 700; padding: 1px 7px; border-radius: 8px; white-space: nowrap; font-variant-numeric: tabular-nums; }
-  .chg.bad { background: #fdecea; color: #c0392b; }
-  .chg.good { background: #e8f6ee; color: #1e8449; }
-  .chg.flat { background: #f0f2f5; color: #6b7785; }
+  .chg.bad { background: var(--expense-soft); color: var(--expense); }
+  .chg.good { background: var(--income-soft); color: var(--income); }
+  .chg.flat { background: var(--surface-2); color: var(--muted); }
 
-  /* Focus (drill-down per category) */
   .chips { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 18px; }
   .chips button {
-    border: 1px solid #e0e4e8; background: white; padding: 6px 12px; border-radius: 16px; white-space: nowrap;
-    font-family: inherit; font-size: 13px; font-weight: 600; color: #4a5a6a; cursor: pointer;
+    border: 1px solid var(--border); background: var(--surface); padding: 5px 12px; border-radius: 16px; white-space: nowrap;
+    font-size: 13px; font-weight: 600; color: var(--text-2); cursor: pointer;
   }
-  .chips button:hover { border-color: #97a3ad; }
-  .chips button.active { background: #2c3e50; border-color: #2c3e50; color: white; }
+  .chips button:hover { border-color: var(--border-strong); color: var(--text); }
+  .chips button.active { background: var(--text); border-color: var(--text); color: white; }
   .chips button.overview { border-style: dashed; }
   .chips button.overview.active { border-style: solid; }
   .focus-title { font-size: 20px; font-weight: 700; margin: 0 0 12px; }
   .stats { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-bottom: 18px; }
-  .stat { background: #f7f9fb; border-radius: 10px; padding: 12px 14px; }
-  .stat.main { background: #fdf3f2; }
-  .stat .label { font-size: 12px; color: #6b7785; font-weight: 600; }
+  .stat { background: var(--surface-2); border-radius: var(--radius); padding: 12px 14px; }
+  .stat.main { background: var(--expense-soft); }
+  .stat .label { font-size: 12px; color: var(--muted); font-weight: 600; }
   .stat .value { font-size: 19px; font-weight: 700; margin-top: 2px; font-variant-numeric: tabular-nums; }
-  .stat .sub { font-size: 12px; margin-top: 4px; color: #97a3ad; }
+  .stat .sub { font-size: 12px; margin-top: 4px; color: var(--muted); }
   .chart-box { position: relative; height: 300px; margin-bottom: 18px; }
-  .sub-h { font-size: 13px; color: #6b7785; font-weight: 700; margin: 4px 0 8px; }
-  .zero { color: #c5ccd3; }
+  .sub-h { font-size: 13px; color: var(--muted); font-weight: 700; margin: 4px 0 8px; }
+  .zero { color: var(--border-strong); }
 
   .table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; margin-bottom: 18px; }
-  table.grid { width: 100%; border-collapse: collapse; font-size: 14px; font-variant-numeric: tabular-nums; }
-  table.grid th {
-    text-align: right; font-size: 12px; color: #6b7785; font-weight: 600; padding: 8px 10px;
-    border-bottom: 2px solid #eef1f5; white-space: nowrap;
-  }
+  table.grid { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+  table.grid th { text-align: right; font-size: 12px; color: var(--muted); font-weight: 600; padding: 8px 10px; border-bottom: 1px solid var(--border); white-space: nowrap; }
   table.grid th.l, table.grid td.l { text-align: left; }
-  table.grid td { padding: 8px 10px; text-align: right; border-bottom: 1px solid #f0f2f5; white-space: nowrap; }
+  table.grid td { padding: 8px 10px; text-align: right; border-bottom: 1px solid var(--border); white-space: nowrap; }
   table.grid td.wrap { white-space: normal; min-width: 140px; }
-  table.grid td.cur { font-weight: 700; background: #fbfcfd; }
+  table.grid td.cur { font-weight: 700; background: var(--surface-2); }
   table.grid tr.link { cursor: pointer; }
-  table.grid tr.link:hover td { background: #f5f8fb; }
-  table.grid tr.link .name::after { content: " ›"; color: #97a3ad; }
-  table.grid tr.total td { font-weight: 700; border-top: 2px solid #d6dbe1; border-bottom: none; }
+  table.grid tr.link:hover td { background: var(--accent-soft); }
+  table.grid tr.link .name::after { content: " ›"; color: var(--faint); }
+  table.grid tr.total td { font-weight: 700; border-top: 2px solid var(--border-strong); border-bottom: none; }
   table.members { min-width: 640px; }
-  table.txns td.memo { color: #6b7785; font-size: 13px; }
-  table.txns td.cat { font-size: 12px; color: #6b7785; }
-  table.txns a { color: #2c70c9; text-decoration: none; }
-  .share-bar { height: 4px; background: #eef1f5; border-radius: 2px; margin-top: 4px; max-width: 200px; }
-  .share-bar span { display: block; height: 100%; background: #c0392b; border-radius: 2px; opacity: .55; }
-  .more-btn {
-    border: none; background: #f0f2f5; color: #2c3e50; font-family: inherit; font-weight: 600; font-size: 13px;
-    padding: 8px 14px; border-radius: 8px; cursor: pointer; margin-top: 8px;
-  }
-  /* Payees */
-  .payee-row { display: flex; justify-content: space-between; gap: 12px; padding: 9px 0; font-size: 14px; border-bottom: 1px solid #f0f2f5; }
+  table.txns td.memo { color: var(--muted); font-size: 13px; }
+  table.txns td.cat { font-size: 12px; color: var(--muted); }
+  table.txns a { text-decoration: none; }
+  .share-bar { height: 4px; background: var(--border); border-radius: 2px; margin-top: 4px; max-width: 200px; }
+  .share-bar span { display: block; height: 100%; background: var(--expense); border-radius: 2px; opacity: .6; }
+  .more-btn { border: none; background: var(--surface-2); color: var(--text); font-weight: 600; font-size: 13px; padding: 8px 14px; border-radius: 8px; cursor: pointer; margin-top: 8px; }
+  .more-btn:hover { background: var(--border); }
+  .payee-row { display: flex; justify-content: space-between; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--border); }
   .payee-row:last-child { border-bottom: none; }
-  .payee-row .rank { color: #97a3ad; font-weight: 600; margin-right: 8px; }
-  .payee-row .cnt { color: #97a3ad; font-size: 12px; margin-left: 6px; }
-  .payee-row .amount { font-weight: 700; color: #c0392b; white-space: nowrap; font-variant-numeric: tabular-nums; }
-  .empty { padding: 30px; text-align: center; color: #aab2ba; font-size: 14px; }
+  .payee-row .rank { color: var(--faint); font-weight: 600; margin-right: 8px; }
+  .payee-row .cnt { color: var(--muted); font-size: 12px; margin-left: 6px; }
+  .payee-row .amount { font-weight: 700; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .empty { padding: 30px; text-align: center; color: var(--muted); }
 
-  @media (max-width: 900px) {
-    .kpis { grid-template-columns: repeat(2, 1fr); }
+  @media (max-width: 1100px) {
     .stats { grid-template-columns: repeat(3, 1fr); }
   }
-  @media (max-width: 600px) {
-    header { padding: 14px 16px; }
-    main { padding: 16px 16px 40px; }
-    .back-link { width: 100%; }
+  @media (max-width: 899px) {
+    .page-head .actions { margin-left: 0; width: 100%; }
     .month-nav { flex: 1; }
     .month-nav select { flex: 1; }
-    .section { padding: 16px 14px; }
-    .kpis { gap: 10px; }
+    .kpis { grid-template-columns: repeat(2, 1fr); }
+    .kpi:nth-child(2) { border-right: none; }
+    .kpi:nth-child(-n+2) { border-bottom: 1px solid var(--border); }
     .kpi { padding: 12px 14px; }
-    .kpi .value { font-size: 19px; }
+    .kpi .value { font-size: 18px; }
+    .section { padding: 16px 14px; }
     .chart-box { height: 260px; }
-    .chips { flex-wrap: nowrap; overflow-x: auto; margin: 0 -14px 16px; padding: 0 14px 4px; }
+    .chips { flex-wrap: nowrap; overflow-x: auto; margin: 0 -14px 16px; padding: 0 14px 4px; scrollbar-width: none; }
     .stats { grid-template-columns: repeat(2, 1fr); }
     .stat.main { grid-column: span 2; }
     .stat .value { font-size: 17px; }
     .focus-title { font-size: 18px; }
-    .export-menu { right: auto; left: 0; }
   }
 </style>
-</head>
-<body>
+{% endblock %}
 {% macro chg(change, cur, prev, up_is_bad=True) -%}
   {%- if change is none -%}
     {%- if cur and not prev -%}<span class="chg {{ 'bad' if up_is_bad else 'good' }}">ใหม่</span>
@@ -181,110 +119,108 @@
   {%- endif -%}
 {%- endmacro %}
 {% macro amt(v) -%}{% if v %}{{ v|baht }}{% else %}<span class="zero">–</span>{% endif %}{%- endmacro %}
-<header>
-  <div class="title">
-    <div class="badge-icon">฿</div>
-    <h1>กราฟและสถิติ<span class="role-pill">{{ user }} · {{ "ผู้ดูแล" if role == "admin" else "ผู้เยี่ยมชม" }}</span></h1>
-  </div>
-  <a href="/logout">ออกจากระบบ</a>
-</header>
-<main>
-  {% set opt_values = month_options|map(attribute='value')|list %}
-  {% set idx = opt_values.index(selected_month) %}
-  <div class="toolbar">
-    <a class="back-link" href="/">&laquo; กลับหน้าหลัก</a>
+{% block content %}
+{% set opt_values = month_options|map(attribute='value')|list %}
+{% set idx = opt_values.index(selected_month) %}
+{% set overall = views[0] %}
+{% set top_group = overall.members|selectattr('cur')|first %}
+<div class="page-head">
+  <h1>ภาพรวม</h1>
+  <div class="actions">
     <div class="month-nav">
-      {% if idx + 1 < opt_values|length %}<a href="/reports?month={{ opt_values[idx + 1] }}" title="เดือนก่อน">&lsaquo;</a>{% else %}<span class="nav-disabled">&lsaquo;</span>{% endif %}
-      <select onchange="location.href='/reports?month=' + this.value" aria-label="เลือกเดือน">
+      {% if idx + 1 < opt_values|length %}<a href="/reports?month={{ opt_values[idx + 1] }}" title="เดือนก่อน" aria-label="เดือนก่อน">{{ icon('left') }}</a>{% else %}<span class="nav-disabled">{{ icon('left') }}</span>{% endif %}
+      <select onchange="location.href='/reports?month=' + this.value + (currentFocus !== 'all' ? '&focus=' + encodeURIComponent(currentFocus) : '')" aria-label="เลือกเดือน">
         {% for o in month_options %}
         <option value="{{ o.value }}" {% if o.value == selected_month %}selected{% endif %}>{{ o.label }}</option>
         {% endfor %}
       </select>
-      {% if idx > 0 %}<a href="/reports?month={{ opt_values[idx - 1] }}" title="เดือนถัดไป">&rsaquo;</a>{% else %}<span class="nav-disabled">&rsaquo;</span>{% endif %}
+      {% if idx > 0 %}<a href="/reports?month={{ opt_values[idx - 1] }}" title="เดือนถัดไป" aria-label="เดือนถัดไป">{{ icon('right') }}</a>{% else %}<span class="nav-disabled">{{ icon('right') }}</span>{% endif %}
     </div>
-    <div class="export-dropdown">
-      <button type="button" class="btn" onclick="toggleExportMenu()">Export &#9662;</button>
-      <div class="export-menu" id="export-menu">
+    <div class="menu" id="export-menu">
+      <button type="button" class="btn" onclick="toggleMenu('export-menu', event)">{{ icon('download') }}<span class="hide-mobile">Export</span></button>
+      <div class="menu-pop export-pop">
         <h4>{{ cur_label }}</h4>
-        <div class="row">
+        <div class="r">
           <button type="button" class="btn" onclick="exportReport('excel', '{{ cur_from }}', '{{ cur_to }}')">Excel</button>
           <button type="button" class="btn" onclick="exportReport('pdf', '{{ cur_from }}', '{{ cur_to }}')">PDF</button>
         </div>
         <h4>กำหนดช่วงเอง</h4>
-        <div class="row">
+        <div class="r">
           <input type="date" id="x-from" value="{{ cur_from }}" aria-label="ตั้งแต่">
           <input type="date" id="x-to" value="{{ cur_to }}" aria-label="ถึง">
         </div>
-        <div class="row">
-          <button type="button" class="btn btn-ghost" onclick="exportCustom('excel')">Excel</button>
-          <button type="button" class="btn btn-ghost" onclick="exportCustom('pdf')">PDF</button>
+        <div class="r">
+          <button type="button" class="btn" onclick="exportCustom('excel')">Excel</button>
+          <button type="button" class="btn" onclick="exportCustom('pdf')">PDF</button>
         </div>
       </div>
     </div>
   </div>
+</div>
 
-  <div class="kpis">
-    <div class="kpi k-expense">
-      <div class="label">รายจ่าย {{ cur_label }}</div>
-      <div class="value">{{ kpis.expense|baht }}</div>
-      <div class="sub">{{ chg(kpis.expense_change, kpis.expense, kpis.expense_prev) }} เทียบ {{ prev_label }} ({{ kpis.expense_prev|baht }})</div>
-    </div>
-    <div class="kpi k-income">
-      <div class="label">รายรับ {{ cur_label }}</div>
-      <div class="value">{{ kpis.income|baht }}</div>
-      <div class="sub">{{ chg(kpis.income_change, kpis.income, kpis.income_prev, up_is_bad=False) }} เทียบ {{ prev_label }} ({{ kpis.income_prev|baht }})</div>
-    </div>
-    <div class="kpi k-net">
-      <div class="label">สุทธิ {{ cur_label }}</div>
-      <div class="value">{{ kpis.net|baht }}</div>
-      <div class="sub">{{ prev_label }}: {{ kpis.net_prev|baht }}</div>
-    </div>
-    <div class="kpi k-car">
-      <div class="label">จำนวนรายการรายจ่าย</div>
-      <div class="value">{{ kpis.expense_count }}</div>
-      <div class="sub">{{ cur_label }}</div>
-    </div>
+<div class="kpis card">
+  <div class="kpi">
+    <div class="label">รายจ่าย {{ cur_label }}</div>
+    <div class="value num expense">{{ kpis.expense|baht }}</div>
+    <div class="sub">{{ chg(kpis.expense_change, kpis.expense, kpis.expense_prev) }} เทียบ {{ prev_label }}</div>
   </div>
-
-  {% if kpis.unknown_count %}
-  <div class="notice">
-    มี {{ kpis.unknown_count }} รายการใน {{ cur_label }} (รวม {{ kpis.unknown_total|baht }} บาท) ที่ยังไม่ระบุว่าเป็นรายรับหรือรายจ่าย — ยังไม่ถูกนับในตัวเลขด้านล่าง
-    <a href="/">ไปแก้ที่หน้าหลัก</a>
+  <div class="kpi">
+    <div class="label">{{ prev_label }}</div>
+    <div class="value num">{{ kpis.expense_prev|baht }}</div>
+    <div class="sub">เฉลี่ย/เดือน {{ overall.total.avg|baht }}</div>
   </div>
-  {% endif %}
-
-  <section class="section">
-    <div class="section-head">
-      <h2>เจาะดูรายหมวด</h2>
-      <span class="hint">กดเลือกหมวดเพื่อสลับดู</span>
-    </div>
-    <div class="chips" id="focus-chips"></div>
-    <div class="focus-title" id="f-title"></div>
-    <div class="stats" id="f-stats"></div>
-    <div class="sub-h">แนวโน้ม 12 เดือน</div>
-    <div class="chart-box"><canvas id="trend-chart"></canvas></div>
-    <div id="f-members"></div>
-    <div id="f-txns"></div>
-  </section>
-  <section class="section">
-    <div class="section-head"><h2>Top 5 ผู้รับเงิน {{ cur_label }}</h2></div>
-    {% if top_payees %}
-    {% for p in top_payees %}
-    <div class="payee-row">
-      <span><span class="rank">{{ loop.index }}.</span>{{ p.name }}<span class="cnt">{{ p.count }} ครั้ง</span></span>
-      <span class="amount">{{ p.total|baht }}</span>
-    </div>
-    {% endfor %}
+  <div class="kpi">
+    <div class="label">จำนวนรายการ {{ cur_label }}</div>
+    <div class="value num">{{ kpis.expense_count }}</div>
+    <div class="sub">{{ ytd_label }}: {{ overall.total.ytd|baht }}</div>
+  </div>
+  <div class="kpi">
+    <div class="label">หมวดที่จ่ายมากสุด</div>
+    {% if top_group %}
+    <div class="value small" title="{{ top_group.name }}">{{ top_group.name }}</div>
+    <div class="sub num">{{ top_group.cur|baht }} · {{ '%.0f'|format(top_group.cur / overall.total.cur * 100) }}% ของเดือน</div>
     {% else %}
-    <div class="empty">ไม่มีรายจ่ายในเดือนนี้</div>
+    <div class="value small">—</div><div class="sub">ไม่มีรายจ่ายเดือนนี้</div>
     {% endif %}
-  </section>
-</main>
-<script>
-function toggleExportMenu() {
-  document.getElementById('export-menu').classList.toggle('open');
-}
+  </div>
+</div>
 
+{% if kpis.unknown_count %}
+<div class="notice">
+  มี {{ kpis.unknown_count }} รายการใน {{ cur_label }} (รวม {{ kpis.unknown_total|baht }} บาท) ที่ยังไม่ระบุประเภท — ยังไม่ถูกนับในตัวเลขด้านล่าง
+  <a href="/">ไปตรวจที่หน้ารายการ</a>
+</div>
+{% endif %}
+
+<section class="section card">
+  <div class="section-head">
+    <h2>เจาะดูรายหมวด</h2>
+    <span class="hint">กดเลือกหมวดเพื่อสลับดู</span>
+  </div>
+  <div class="chips" id="focus-chips"></div>
+  <div class="focus-title" id="f-title"></div>
+  <div class="stats" id="f-stats"></div>
+  <div class="sub-h">แนวโน้ม 12 เดือน</div>
+  <div class="chart-box"><canvas id="trend-chart"></canvas></div>
+  <div id="f-members"></div>
+  <div id="f-txns"></div>
+</section>
+<section class="section card">
+  <div class="section-head"><h2>Top 5 ผู้รับเงิน {{ cur_label }}</h2></div>
+  {% if top_payees %}
+  {% for p in top_payees %}
+  <div class="payee-row">
+    <span><span class="rank">{{ loop.index }}.</span>{{ p.name }}<span class="cnt">{{ p.count }} ครั้ง</span></span>
+    <span class="amount">{{ p.total|baht }}</span>
+  </div>
+  {% endfor %}
+  {% else %}
+  <div class="empty">ไม่มีรายจ่ายในเดือนนี้</div>
+  {% endif %}
+</section>
+{% endblock %}
+{% block scripts %}
+<script>
 function exportReport(kind, from, to) {
   document.getElementById('export-menu').classList.remove('open');
   location.href = `/reports/export/${kind}?` + new URLSearchParams({ date_from: from, date_to: to });
@@ -296,10 +232,6 @@ function exportCustom(kind) {
   if (from && to) exportReport(kind, from, to);
 }
 
-document.addEventListener('click', (e) => {
-  const dropdown = document.querySelector('.export-dropdown');
-  if (!dropdown.contains(e.target)) document.getElementById('export-menu').classList.remove('open');
-});
 
 const R = {{ report_json|safe }};
 const IS_ADMIN = {{ 'true' if role == 'admin' else 'false' }};
@@ -468,5 +400,4 @@ R.views.forEach(v => {
 });
 selectView({{ focus|tojson }});
 </script>
-</body>
-</html>
+{% endblock %}

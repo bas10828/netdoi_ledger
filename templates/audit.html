@@ -1,84 +1,57 @@
-<!DOCTYPE html>
-<html lang="th">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>ประวัติการแก้ไข</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
+{% extends "base.html" %}
+{% block title %}ประวัติการแก้ไข · บัญชีรายจ่าย{% endblock %}
+{% block head %}
 <style>
-  * { box-sizing: border-box; }
-  body { font-family: "Sarabun", sans-serif; background: #eef1f5; margin: 0; color: #1c2833; }
-  header {
-    background: linear-gradient(120deg, #1e2a38, #2c3e50 60%, #34495e);
-    color: white; padding: 18px 32px; display: flex; justify-content: space-between; align-items: center;
-    box-shadow: 0 2px 12px rgba(0,0,0,0.15);
+  .audit { overflow: hidden; }
+  .audit table { width: 100%; border-collapse: collapse; }
+  .audit th {
+    text-align: left; font-size: 12px; font-weight: 600; color: var(--muted); padding: 10px 16px;
+    background: var(--surface-2); border-bottom: 1px solid var(--border); white-space: nowrap;
   }
-  header .title { display: flex; align-items: center; gap: 10px; }
-  header .badge-icon {
-    width: 30px; height: 30px; border-radius: 8px; background: rgba(255,255,255,0.15);
-    display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 14px;
-  }
-  header h1 { font-size: 17px; margin: 0; font-weight: 600; }
-  header .role-pill {
-    font-size: 11px; padding: 2px 10px; border-radius: 10px; margin-left: 8px;
-    background: rgba(255,255,255,0.15); color: #cdd9e5; vertical-align: middle;
-  }
-  header a { color: #cdd9e5; text-decoration: none; font-size: 13px; padding: 6px 12px; border-radius: 6px; transition: background .15s; }
-  header a:hover { color: white; background: rgba(255,255,255,0.1); }
-  main { padding: 28px 32px; max-width: 1800px; margin: 0 auto; }
-  .back-link { display: inline-flex; align-items: center; gap: 6px; margin-bottom: 18px; color: #2c70c9; text-decoration: none; font-size: 13px; font-weight: 600; }
-  .back-link:hover { text-decoration: underline; }
-  .table-wrap { background: white; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.06); overflow-x: auto; }
-  table { width: 100%; border-collapse: collapse; }
-  th, td { padding: 13px 14px; text-align: left; font-size: 13px; border-bottom: 1px solid #f0f2f5; }
-  th { background: #f7f8fa; color: #97a3ad; font-weight: 600; font-size: 11px; letter-spacing: .02em; }
-  tbody tr:nth-child(even) { background: #fafbfc; }
-  tr:last-child td { border-bottom: none; }
-  .action-create { color: #1e8449; font-weight: 600; }
-  .action-update { color: #2c70c9; font-weight: 600; }
-  .action-delete { color: #c0392b; font-weight: 600; }
-  .summary { font-size: 12px; color: #555; }
-  .empty { padding: 50px; text-align: center; color: #aab2ba; font-size: 14px; }
-  @media (max-width: 768px) {
-    header { padding: 14px 16px; }
-    main { padding: 16px; }
-    th, td { padding: 9px 10px; font-size: 12px; }
+  .audit td { padding: 10px 16px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  .audit tr:last-child td { border-bottom: none; }
+  .audit .when { white-space: nowrap; color: var(--text-2); }
+  .audit .summary { color: var(--text-2); word-break: break-word; }
+  .act { display: inline-block; font-size: 12px; font-weight: 600; padding: 1px 9px; border-radius: 10px; white-space: nowrap; }
+  .act-create { background: var(--income-soft); color: var(--income); }
+  .act-update { background: var(--accent-soft); color: var(--accent); }
+  .act-delete { background: var(--expense-soft); color: var(--expense); }
+  .empty-state { padding: 56px 20px; text-align: center; color: var(--muted); }
+  @media (max-width: 899px) {
+    .audit thead { display: none; }
+    .audit tr { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; padding: 12px 14px; border-bottom: 1px solid var(--border); }
+    .audit tr:last-child { border-bottom: none; }
+    .audit td { padding: 0; border: none; }
+    .audit td.when { grid-column: 1 / -1; font-size: 12px; color: var(--muted); }
+    .audit td.txn { text-align: right; color: var(--muted); }
+    .audit td.summary { grid-column: 1 / -1; margin-top: 4px; }
+    .audit td.by { display: none; }
   }
 </style>
-</head>
-<body>
-<header>
-  <div class="title">
-    <div class="badge-icon">฿</div>
-    <h1>ประวัติการแก้ไข<span class="role-pill">{{ user }} · {{ "ผู้ดูแล" if role == "admin" else "ผู้เยี่ยมชม" }}</span></h1>
-  </div>
-  <a href="/logout">ออกจากระบบ</a>
-</header>
-<main>
-  <a class="back-link" href="/">&laquo; กลับหน้าหลัก</a>
-  <div class="table-wrap">
+{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>ประวัติการแก้ไข</h1>
+  <span class="sub">{{ entries|length }} รายการล่าสุด</span>
+</div>
+<div class="card audit">
   {% if entries %}
   <table>
-    <thead>
-    <tr><th>เวลา</th><th>แก้โดย</th><th>การกระทำ</th><th>รายการ #</th><th>รายละเอียดที่เปลี่ยน</th></tr>
-    </thead>
+    <thead><tr><th>เวลา</th><th>แก้โดย</th><th>การกระทำ</th><th>รายการ</th><th>สิ่งที่เปลี่ยน</th></tr></thead>
     <tbody>
     {% for e in entries %}
     <tr>
-      <td>{{ e.changed_at.strftime("%Y-%m-%d %H:%M:%S") }}</td>
-      <td>{{ e.changed_by }}</td>
-      <td><span class="action-{{ e.action }}">{{ e.action_label }}</span></td>
-      <td>{{ e.txn_id }}</td>
+      <td class="when num">{{ e.changed_at.strftime("%d/%m/%Y %H:%M") }}</td>
+      <td class="by">{{ e.changed_by }}</td>
+      <td><span class="act act-{{ e.action }}">{{ e.action_label }}</span></td>
+      <td class="txn num">{% if e.txn_id %}#{{ e.txn_id }}{% endif %}</td>
       <td class="summary">{{ e.summary }}</td>
     </tr>
     {% endfor %}
     </tbody>
   </table>
   {% else %}
-  <div class="empty">ยังไม่มีประวัติการแก้ไข</div>
+  <div class="empty-state">ยังไม่มีประวัติการแก้ไข</div>
   {% endif %}
-  </div>
-</main>
-</body>
-</html>
+</div>
+{% endblock %}

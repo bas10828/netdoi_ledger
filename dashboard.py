@@ -156,6 +156,32 @@ def save_uploaded_photo(cur, photo):
     return cur.fetchone()[0]
 
 
+def shell_context(cur, request):
+    """Template variables the app shell (base.html sidebar) needs on every page.
+    Works regardless of the calling cursor's factory."""
+    with cur.connection.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as c:
+        c.execute("SELECT COALESCE(SUM(cost_usd), 0) AS total FROM ai_usage_log")
+        ai_spent = float(c.fetchone()["total"])
+        ai_starting_balance = float(get_setting(c, "ai_starting_balance_usd", "0"))
+    return {
+        "user": request.session.get("user"),
+        "role": request.session.get("role"),
+        "ai_balance": ai_starting_balance - ai_spent,
+        "ai_starting_balance": ai_starting_balance,
+    }
+
+
+def render_page(request, template, nav, context, status_code=200):
+    """Render a page that extends base.html — adds the shell's sidebar context."""
+    conn = db()
+    try:
+        with conn.cursor() as cur:
+            shell = shell_context(cur, request)
+    finally:
+        conn.close()
+    return templates.TemplateResponse(request, template, {**shell, "nav": nav, **context}, status_code=status_code)
+
+
 @app.get("/")
 def dashboard(request: Request):
     redirect = require_login(request)
@@ -166,18 +192,15 @@ def dashboard(request: Request):
     try:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             cur.execute(
-                """SELECT id, raw_file_id, txn_date, txn_time, direction, category, amount, bank,
-                          sender_name, receiver_name, memo, ai_model, verified_bank, status,
-                          qr_trans_ref, printed_ref
+                """SELECT id, raw_file_id, txn_date, txn_time, direction, category, amount, fee, bank,
+                          sender_name, sender_account, receiver_name, receiver_account, memo,
+                          ai_model, verified_bank, status, qr_trans_ref, printed_ref
                    FROM slip_transactions
                    ORDER BY txn_date DESC, txn_time DESC, id DESC"""
             )
             rows = cur.fetchall()
-
-            cur.execute("SELECT COALESCE(SUM(cost_usd), 0) AS total FROM ai_usage_log")
-            ai_spent = float(cur.fetchone()["total"])
-            ai_starting_balance = float(get_setting(cur, "ai_starting_balance_usd", "0"))
-            categories = [c["name"] for c in get_categories(cur)]
+            categories = get_categories(cur)
+            shell = shell_context(cur, request)
     finally:
         conn.close()
 
@@ -186,39 +209,43 @@ def dashboard(request: Request):
         dup_key = r["qr_trans_ref"] or r["printed_ref"]
         if dup_key:
             groups[dup_key].append(r)
-    dup_color = {}
+    dup_group = {}
     dup_extra_ids = set()
-    palette = ["dup-1", "dup-2", "dup-3", "dup-4", "dup-5"]
-    i = 0
-    for ref, group in groups.items():
-        if len(group) > 1:
-            for r in group:
-                dup_color[r["id"]] = palette[i % len(palette)]
-            i += 1
-            canonical = min(
-                group, key=lambda r: (r["txn_date"] or date.min, r["txn_time"] or time.min, r["id"])
-            )
-            dup_extra_ids.update(r["id"] for r in group if r["id"] != canonical["id"])
+    for i, group in enumerate(g for g in groups.values() if len(g) > 1):
+        for r in group:
+            dup_group[r["id"]] = i + 1
+        canonical = min(
+            group, key=lambda r: (r["txn_date"] or date.min, r["txn_time"] or time.min, r["id"])
+        )
+        dup_extra_ids.update(r["id"] for r in group if r["id"] != canonical["id"])
 
-    counted_rows = [r for r in rows if r["id"] not in dup_extra_ids]
-    expense = sum(float(r["amount"]) for r in counted_rows if r["direction"] == "expense")
-    income = sum(float(r["amount"]) for r in counted_rows if r["direction"] == "income")
+    txns = [
+        {
+            "id": r["id"], "file": r["raw_file_id"],
+            "date": r["txn_date"].isoformat() if r["txn_date"] else "",
+            "time": r["txn_time"].strftime("%H:%M") if r["txn_time"] else "",
+            "direction": r["direction"], "category": r["category"] or "",
+            "amount": float(r["amount"]), "fee": float(r["fee"] or 0), "bank": r["bank"] or "",
+            "sender": r["sender_name"] or "", "sender_acct": r["sender_account"] or "",
+            "receiver": r["receiver_name"] or "", "receiver_acct": r["receiver_account"] or "",
+            "memo": r["memo"] or "", "model": r["ai_model"] or "", "verified": bool(r["verified_bank"]),
+            "status": r["status"], "ref": r["qr_trans_ref"] or r["printed_ref"] or "",
+            "dup": dup_group.get(r["id"], 0), "dup_extra": r["id"] in dup_extra_ids,
+        }
+        for r in rows
+    ]
 
     return templates.TemplateResponse(
         request,
         "dashboard.html",
         {
-            "user": request.session.get("user"),
-            "role": request.session.get("role"),
-            "rows": rows,
-            "dup_color": dup_color,
-            "expense": expense,
-            "income": income,
-            "net": income - expense,
-            "count": len(counted_rows),
-            "ai_balance": ai_starting_balance - ai_spent,
-            "ai_starting_balance": ai_starting_balance,
-            "categories": categories,
+            **shell,
+            "nav": "txns",
+            # Embedded in a <script> tag and carries free-text memos — escape "<".
+            "txns_json": json.dumps(txns, ensure_ascii=False).replace("<", "\\u003c"),
+            "categories_json": json.dumps(
+                [{"name": c["name"], "group": c["group_name"] or ""} for c in categories], ensure_ascii=False
+            ).replace("<", "\\u003c"),
         },
     )
 
@@ -596,12 +623,11 @@ def reports(request: Request, month: str = "", focus: str = "all"):
     finally:
         conn.close()
 
-    return templates.TemplateResponse(
+    return render_page(
         request,
         "reports.html",
+        "reports",
         {
-            "user": request.session.get("user"),
-            "role": request.session.get("role"),
             "selected_month": f"{y:04d}-{m:02d}",
             "month_options": [
                 {"value": f"{oy:04d}-{om:02d}", "label": _month_label(oy, om)}
@@ -620,7 +646,6 @@ def reports(request: Request, month: str = "", focus: str = "all"):
 
 
 COLOR_EXPENSE = "C0392B"
-COLOR_INCOME = "1E8449"
 
 
 def _style_table_sheet(ws, df, table_name, currency_cols):
@@ -666,8 +691,6 @@ def reports_export_excel(
         [
             ("ช่วงเวลา", data["period_label"]),
             ("รายจ่าย", data["total_expense"]),
-            ("รายรับ", data["total_income"]),
-            ("สุทธิ", data["net"]),
         ],
         columns=["รายการ", "ค่า"],
     )
@@ -682,7 +705,6 @@ def reports_export_excel(
         {
             "ช่วง": data["bucket_chart"]["labels"],
             "รายจ่าย": data["bucket_chart"]["expense"],
-            "รายรับ": data["bucket_chart"]["income"],
         }
     )
 
@@ -696,22 +718,22 @@ def reports_export_excel(
         _style_table_sheet(writer.sheets["สรุป"], summary_df, "tbl_summary", ["ค่า"])
         _style_table_sheet(writer.sheets["ตามหมวด"], category_df, "tbl_category", ["ยอด (บาท)"])
         _style_table_sheet(writer.sheets["Top ผู้รับเงิน"], payee_df, "tbl_payee", ["ยอด (บาท)"])
-        _style_table_sheet(writer.sheets["กราฟ"], bucket_df, "tbl_bucket", ["รายจ่าย", "รายรับ"])
+        _style_table_sheet(writer.sheets["กราฟ"], bucket_df, "tbl_bucket", ["รายจ่าย"])
 
         if len(bucket_df):
             bar = BarChart()
             bar.type = "col"
-            bar.title = "รายรับ-รายจ่ายตามช่วงเวลา"
+            bar.title = "รายจ่ายตามช่วงเวลา"
+            bar.legend = None
             bar.y_axis.title = "บาท"
             bar.y_axis.numFmt = "#,##0"
             bar.width, bar.height = 24, 12
             bar.gapWidth = 50
             ws = writer.sheets["กราฟ"]
             n = len(bucket_df) + 1
-            bar.add_data(Reference(ws, min_col=2, max_col=3, min_row=1, max_row=n), titles_from_data=True)
+            bar.add_data(Reference(ws, min_col=2, min_row=1, max_row=n), titles_from_data=True)
             bar.set_categories(Reference(ws, min_col=1, min_row=2, max_row=n))
             bar.series[0].graphicalProperties.solidFill = COLOR_EXPENSE
-            bar.series[1].graphicalProperties.solidFill = COLOR_INCOME
             bar.dataLabels = DataLabelList()
             bar.dataLabels.showVal = True
             ws.add_chart(bar, f"{get_column_letter(bucket_df.shape[1] + 2)}2")
@@ -770,7 +792,7 @@ def reports_export_pdf(
 
     buf = io.BytesIO()
     build_summary_pdf(
-        data["period_label"], data["total_expense"], data["total_income"], data["net"],
+        data["period_label"], data["total_expense"],
         data["category_rows"], data["top_payees"], data["bucket_chart"], buf,
     )
     buf.seek(0)
@@ -787,7 +809,9 @@ def build_export_filter(direction, date_from, date_to, bank, status, name, categ
                          amount_min=None, amount_max=None):
     where = []
     params = []
-    if category:
+    if category == "__none__":
+        where.append("category IS NULL")
+    elif category:
         where.append("category = %s")
         params.append(category)
     if direction:
@@ -812,6 +836,8 @@ def build_export_filter(direction, date_from, date_to, bank, status, name, categ
         where.append("verified_bank = true")
     elif status == "unverified":
         where.append("verified_bank = false")
+    elif status == "attention":
+        where.append("(direction = 'unknown' OR (direction = 'expense' AND category IS NULL))")
     elif status == "dup":
         where.append("""COALESCE(qr_trans_ref, NULLIF(printed_ref, '')) IN (
             SELECT COALESCE(qr_trans_ref, NULLIF(printed_ref, '')) FROM slip_transactions
@@ -819,8 +845,8 @@ def build_export_filter(direction, date_from, date_to, bank, status, name, categ
             GROUP BY COALESCE(qr_trans_ref, NULLIF(printed_ref, '')) HAVING COUNT(*) > 1
         )""")
     if name:
-        where.append("(sender_name ILIKE %s OR receiver_name ILIKE %s)")
-        params.extend([f"%{name}%", f"%{name}%"])
+        where.append("(sender_name ILIKE %s OR receiver_name ILIKE %s OR memo ILIKE %s)")
+        params.extend([f"%{name}%"] * 3)
     return where, params
 
 
@@ -876,9 +902,9 @@ def export_excel(
     summary = (
         df.groupby("ประเภท")["ยอดเงิน"]
         .sum()
-        .reindex(["expense", "income", "unknown"])
+        .reindex(["expense", "unknown"])
         .fillna(0)
-        .rename({"expense": "รายจ่าย", "income": "รายรับ", "unknown": "ไม่ระบุ"})
+        .rename({"expense": "รายจ่าย", "unknown": "ไม่ระบุประเภท"})
     )
 
     buf = io.BytesIO()
@@ -965,14 +991,7 @@ def categories_view(request: Request):
     finally:
         conn.close()
 
-    return templates.TemplateResponse(
-        request,
-        "settings_categories.html",
-        {
-            "user": request.session.get("user"), "role": request.session.get("role"),
-            "categories": categories,
-        },
-    )
+    return render_page(request, "settings_categories.html", "categories", {"categories": categories})
 
 
 @app.post("/settings/categories/new")
@@ -1114,7 +1133,7 @@ def summarize_audit_entry(action, before, after):
     for key, label in AUDIT_FIELD_LABELS.items():
         old_val, new_val = before.get(key), after.get(key)
         if _normalize_for_diff(key, old_val) != _normalize_for_diff(key, new_val):
-            changes.append(f"{label}: {old_val} → {new_val}")
+            changes.append(f"{label}: {'ไม่ระบุ' if old_val is None else old_val} → {'ไม่ระบุ' if new_val is None else new_val}")
     return "; ".join(changes) if changes else "ไม่มีการเปลี่ยนแปลง"
 
 
@@ -1141,11 +1160,7 @@ def audit_view(request: Request):
         e["action_label"] = AUDIT_ACTION_LABELS.get(e["action"], e["action"])
         e["summary"] = summarize_audit_entry(e["action"], e["before_data"], e["after_data"])
 
-    return templates.TemplateResponse(
-        request,
-        "audit.html",
-        {"user": request.session.get("user"), "role": request.session.get("role"), "entries": entries},
-    )
+    return render_page(request, "audit.html", "audit", {"entries": entries})
 
 
 @app.get("/chat")
@@ -1174,16 +1189,7 @@ def chat_view(request: Request):
 
     names = resolve_display_names(messages)
 
-    return templates.TemplateResponse(
-        request,
-        "chat.html",
-        {
-            "messages": messages,
-            "names": names,
-            "user": request.session.get("user"),
-            "role": request.session.get("role"),
-        },
-    )
+    return render_page(request, "chat.html", "chat", {"messages": messages, "names": names})
 
 
 @app.get("/transactions/new")
@@ -1205,13 +1211,9 @@ def new_form(request: Request):
     finally:
         conn.close()
 
-    return templates.TemplateResponse(
-        request,
-        "edit_transaction.html",
-        {
-            "txn": empty, "form_action": "/transactions/new", "categories": categories,
-            "user": request.session.get("user"), "role": request.session.get("role"),
-        },
+    return render_page(
+        request, "edit_transaction.html", "txns",
+        {"txn": empty, "form_action": "/transactions/new", "categories": categories},
     )
 
 
@@ -1284,14 +1286,9 @@ def edit_form(txn_id: int, request: Request):
         raise HTTPException(404)
     if not txn["category"]:
         txn["category"] = guess_category(txn["memo"], categories)
-    return templates.TemplateResponse(
-        request,
-        "edit_transaction.html",
-        {
-            "txn": txn, "form_action": f"/transactions/{txn_id}/edit",
-            "categories": [c["name"] for c in categories],
-            "user": request.session.get("user"), "role": request.session.get("role"),
-        },
+    return render_page(
+        request, "edit_transaction.html", "txns",
+        {"txn": txn, "form_action": f"/transactions/{txn_id}/edit", "categories": [c["name"] for c in categories]},
     )
 
 

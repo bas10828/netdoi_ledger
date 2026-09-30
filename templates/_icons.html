@@ -1,0 +1,22 @@
+{#- Inline SVG icon set (stroke icons, 24px grid). Usage: {% from "_icons.html" import icon %} {{ icon('list') }} -#}
+{%- macro icon(name, cls="icon") -%}
+<svg class="{{ cls }}" viewBox="0 0 24 24" aria-hidden="true">
+  {%- if name == 'list' -%}<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>
+  {%- elif name == 'chart' -%}<path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/>
+  {%- elif name == 'chat' -%}<path d="M21 12a8 8 0 0 1-11.6 7.1L3 21l1.9-6.4A8 8 0 1 1 21 12z"/>
+  {%- elif name == 'tag' -%}<path d="M20.6 13.4l-7.2 7.2a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8z"/><path d="M7.5 7.5h.01"/>
+  {%- elif name == 'history' -%}<path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5M12 7v5l3 2"/>
+  {%- elif name == 'plus' -%}<path d="M12 5v14M5 12h14"/>
+  {%- elif name == 'logout' -%}<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>
+  {%- elif name == 'search' -%}<circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/>
+  {%- elif name == 'filter' -%}<path d="M3 5h18M6 12h12M10 19h4"/>
+  {%- elif name == 'download' -%}<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>
+  {%- elif name == 'x' -%}<path d="M18 6L6 18M6 6l12 12"/>
+  {%- elif name == 'left' -%}<path d="M15 18l-6-6 6-6"/>
+  {%- elif name == 'right' -%}<path d="M9 18l6-6-6-6"/>
+  {%- elif name == 'edit' -%}<path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>
+  {%- elif name == 'trash' -%}<path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/>
+  {%- elif name == 'user' -%}<path d="M20 21a8 8 0 0 0-16 0"/><circle cx="12" cy="8" r="4"/>
+  {%- endif -%}
+</svg>
+{%- endmacro -%}

@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#ffffff">
+<title>{% block title %}บัญชีรายจ่าย{% endblock %}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f5f6f8;
+    --surface: #ffffff;
+    --surface-2: #f8f9fb;
+    --border: #e5e7eb;
+    --border-strong: #d1d5db;
+    --text: #111827;
+    --text-2: #4b5563;
+    --muted: #6b7280;
+    --faint: #9ca3af;
+    --accent: #2f5bd3;
+    --accent-hover: #2449b0;
+    --accent-soft: #eef2fd;
+    --expense: #c8372d;
+    --expense-soft: #fdeeec;
+    --income: #15803d;
+    --income-soft: #e8f5ec;
+    --warn: #b45309;
+    --warn-soft: #fef3e2;
+    --radius: 10px;
+    --radius-lg: 14px;
+    --shadow-sm: 0 1px 2px rgba(17, 24, 39, 0.05);
+    --shadow: 0 1px 3px rgba(17, 24, 39, 0.06), 0 1px 2px rgba(17, 24, 39, 0.04);
+    --shadow-lg: 0 12px 32px rgba(17, 24, 39, 0.16);
+    --sidebar-w: 236px;
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font-family: "IBM Plex Sans Thai", "Sarabun", system-ui, sans-serif; font-size: 14px; line-height: 1.5;
+  }
+  a { color: var(--accent); }
+  button, input, select, textarea { font-family: inherit; font-size: inherit; color: inherit; }
+  .num { font-variant-numeric: tabular-nums; }
+  .icon { width: 18px; height: 18px; flex: none; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+  /* ---------- Shell ---------- */
+  .sidebar {
+    position: fixed; inset: 0 auto 0 0; width: var(--sidebar-w); background: var(--surface);
+    border-right: 1px solid var(--border); display: flex; flex-direction: column; z-index: 30;
+  }
+  .brand { display: flex; align-items: center; gap: 10px; padding: 18px 18px 14px; text-decoration: none; color: var(--text); }
+  .brand-mark {
+    width: 32px; height: 32px; border-radius: 9px; background: var(--text); color: white;
+    display: grid; place-items: center; font-weight: 700; font-size: 15px;
+  }
+  .brand-name { font-weight: 700; font-size: 15px; line-height: 1.2; }
+  .brand-sub { font-size: 11px; color: var(--muted); }
+  .nav { padding: 6px 10px; display: flex; flex-direction: column; gap: 2px; }
+  .nav-label { font-size: 11px; font-weight: 600; color: var(--faint); padding: 14px 10px 4px; letter-spacing: .02em; }
+  .nav a {
+    display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 8px;
+    color: var(--text-2); text-decoration: none; font-weight: 500;
+  }
+  .nav a:hover { background: var(--surface-2); color: var(--text); }
+  .nav a.active { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  .nav a .badge-count {
+    margin-left: auto; background: var(--warn); color: white; font-size: 11px; font-weight: 700;
+    padding: 0 7px; border-radius: 10px; line-height: 18px;
+  }
+  .sidebar-foot { margin-top: auto; padding: 12px; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 10px; }
+  .ai-widget { background: var(--surface-2); border-radius: var(--radius); padding: 10px 12px; font-size: 12px; }
+  .ai-widget .ai-row { display: flex; justify-content: space-between; align-items: center; }
+  .ai-widget .label { color: var(--muted); }
+  .ai-widget .value { font-weight: 700; font-size: 14px; }
+  .ai-widget.low .value { color: var(--expense); }
+  .ai-widget.low { background: var(--expense-soft); }
+  .ai-widget button.link { background: none; border: none; color: var(--accent); cursor: pointer; padding: 0; font-size: 12px; }
+  .ai-widget form { display: none; gap: 6px; margin-top: 8px; }
+  .ai-widget form.open { display: flex; }
+  .ai-widget input { width: 100%; min-width: 0; padding: 5px 8px; border: 1px solid var(--border); border-radius: 6px; font-size: 12px; }
+  .ai-widget form button { padding: 5px 10px; border: none; border-radius: 6px; background: var(--text); color: white; font-size: 12px; cursor: pointer; }
+  .user-row { display: flex; align-items: center; gap: 10px; }
+  .avatar {
+    width: 30px; height: 30px; border-radius: 50%; background: var(--accent-soft); color: var(--accent);
+    display: grid; place-items: center; font-weight: 700; font-size: 13px; flex: none; text-transform: uppercase;
+  }
+  .user-row .who { flex: 1; min-width: 0; line-height: 1.25; }
+  .user-row .who b { display: block; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .user-row .who span { font-size: 11px; color: var(--muted); }
+  .icon-btn {
+    display: inline-grid; place-items: center; width: 34px; height: 34px; border-radius: 8px;
+    border: none; background: none; color: var(--muted); cursor: pointer; text-decoration: none;
+  }
+  .icon-btn:hover { background: var(--surface-2); color: var(--text); }
+
+  .app { margin-left: var(--sidebar-w); min-height: 100vh; }
+  .page { max-width: 1280px; margin: 0 auto; padding: 28px 32px 64px; }
+  .page-head { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; }
+  .page-head h1 { font-size: 22px; font-weight: 700; margin: 0; letter-spacing: -.01em; }
+  .page-head .sub { color: var(--muted); font-size: 13px; }
+  .page-head .actions { margin-left: auto; display: flex; gap: 8px; align-items: center; }
+
+  .topbar, .tabbar, .fab { display: none; }
+
+  /* ---------- Components ---------- */
+  .btn {
+    display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; border-radius: 8px;
+    border: 1px solid var(--border-strong); background: var(--surface); color: var(--text);
+    font-weight: 600; font-size: 13px; cursor: pointer; text-decoration: none; white-space: nowrap;
+    box-shadow: var(--shadow-sm);
+  }
+  .btn:hover { background: var(--surface-2); }
+  .btn .icon { width: 16px; height: 16px; }
+  .btn-primary { background: var(--accent); border-color: var(--accent); color: white; }
+  .btn-primary:hover { background: var(--accent-hover); }
+  .btn-danger { color: var(--expense); }
+  .btn-danger:hover { background: var(--expense-soft); }
+  .btn-ghost { border-color: transparent; box-shadow: none; background: none; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow); }
+  .menu { position: relative; }
+  .menu-pop {
+    display: none; position: absolute; right: 0; top: calc(100% + 6px); z-index: 40; min-width: 180px;
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow-lg); padding: 6px;
+  }
+  .menu.open .menu-pop { display: block; }
+  .menu-pop button, .menu-pop a {
+    display: flex; width: 100%; align-items: center; gap: 8px; padding: 8px 10px; border: none; background: none;
+    border-radius: 6px; cursor: pointer; text-align: left; color: var(--text); text-decoration: none; font-size: 13px;
+  }
+  .menu-pop button:hover, .menu-pop a:hover { background: var(--surface-2); }
+  .menu-pop .menu-note { font-size: 11px; color: var(--muted); padding: 6px 10px 2px; }
+
+  .toast-wrap { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); z-index: 100; display: flex; flex-direction: column; gap: 8px; align-items: center; pointer-events: none; }
+  .toast {
+    background: var(--text); color: white; padding: 10px 16px; border-radius: 10px; font-size: 13px; font-weight: 500;
+    box-shadow: var(--shadow-lg); animation: toast-in .18s ease-out; max-width: 90vw;
+  }
+  .toast.error { background: var(--expense); }
+  @keyframes toast-in { from { opacity: 0; transform: translateY(8px); } }
+
+  /* ---------- Mobile ---------- */
+  @media (max-width: 899px) {
+    .sidebar { display: none; }
+    .app { margin-left: 0; padding-bottom: calc(64px + env(safe-area-inset-bottom)); }
+    .page { padding: 16px 16px 32px; }
+    .page-head h1 { font-size: 20px; }
+    .topbar {
+      display: flex; align-items: center; gap: 10px; position: sticky; top: 0; z-index: 30;
+      background: rgba(255,255,255,.92); backdrop-filter: saturate(180%) blur(12px); -webkit-backdrop-filter: saturate(180%) blur(12px);
+      border-bottom: 1px solid var(--border); padding: 10px 12px 10px 16px;
+    }
+    .topbar .brand { padding: 0; }
+    .topbar .brand-name { font-size: 14px; }
+    .topbar .menu { margin-left: auto; }
+    .tabbar {
+      display: flex; position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; background: var(--surface);
+      border-top: 1px solid var(--border); padding-bottom: env(safe-area-inset-bottom);
+    }
+    .tabbar a {
+      flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 0 7px;
+      color: var(--muted); text-decoration: none; font-size: 11px; font-weight: 500; position: relative;
+    }
+    .tabbar a .icon { width: 22px; height: 22px; }
+    .tabbar a.active { color: var(--accent); font-weight: 600; }
+    .tabbar a .dot { position: absolute; top: 5px; left: calc(50% + 8px); min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px; background: var(--warn); color: white; font-size: 10px; font-weight: 700; line-height: 16px; text-align: center; }
+    .fab {
+      display: grid; place-items: center; position: fixed; right: 16px; bottom: calc(76px + env(safe-area-inset-bottom)); z-index: 31;
+      width: 52px; height: 52px; border-radius: 16px; background: var(--accent); color: white; box-shadow: var(--shadow-lg);
+    }
+    .fab .icon { width: 24px; height: 24px; }
+    .hide-mobile { display: none !important; }
+    .toast-wrap { bottom: calc(84px + env(safe-area-inset-bottom)); }
+  }
+</style>
+{% block head %}{% endblock %}
+</head>
+<body>
+{% from "_icons.html" import icon %}
+{% set is_admin = role == 'admin' %}
+<aside class="sidebar">
+  <a class="brand" href="/">
+    <span class="brand-mark">฿</span>
+    <span><span class="brand-name">บัญชีรายจ่าย</span><br><span class="brand-sub">NetDoi Ledger</span></span>
+  </a>
+  <nav class="nav">
+    <a href="/" class="{{ 'active' if nav == 'txns' }}">{{ icon('list') }}รายการ<span class="badge-count" data-attention-count hidden></span></a>
+    <a href="/reports" class="{{ 'active' if nav == 'reports' }}">{{ icon('chart') }}ภาพรวม</a>
+    <a href="/chat" class="{{ 'active' if nav == 'chat' }}">{{ icon('chat') }}แชต LINE</a>
+    {% if is_admin %}
+    <div class="nav-label">ผู้ดูแล</div>
+    <a href="/settings/categories" class="{{ 'active' if nav == 'categories' }}">{{ icon('tag') }}จัดการหมวด</a>
+    <a href="/audit" class="{{ 'active' if nav == 'audit' }}">{{ icon('history') }}ประวัติการแก้ไข</a>
+    {% endif %}
+  </nav>
+  <div class="sidebar-foot">
+    {% if ai_balance is defined %}
+    <div class="ai-widget {{ 'low' if ai_balance <= 1 }}">
+      <div class="ai-row">
+        <span class="label">AI credit คงเหลือ</span>
+        {% if is_admin %}<button type="button" class="link" onclick="this.closest('.ai-widget').querySelector('form').classList.toggle('open')">แก้</button>{% endif %}
+      </div>
+      <div class="value num">${{ "%.2f"|format(ai_balance) }}</div>
+      {% if is_admin %}
+      <form method="post" action="/settings/ai-balance" title="ยอด top-up ตั้งต้น (USD)">
+        <input type="number" step="0.01" name="value" value="{{ "%.2f"|format(ai_starting_balance) }}" aria-label="ยอด top-up ตั้งต้น (USD)">
+        <button type="submit">บันทึก</button>
+      </form>
+      {% endif %}
+    </div>
+    {% endif %}
+    <div class="user-row">
+      <span class="avatar">{{ (user or '?')[:1] }}</span>
+      <span class="who"><b>{{ user }}</b><span>{{ "ผู้ดูแล" if is_admin else "ผู้เยี่ยมชม" }}</span></span>
+      <a class="icon-btn" href="/logout" title="ออกจากระบบ" aria-label="ออกจากระบบ">{{ icon('logout') }}</a>
+    </div>
+  </div>
+</aside>
+
+<header class="topbar">
+  <a class="brand" href="/"><span class="brand-mark">฿</span><span class="brand-name">บัญชีรายจ่าย</span></a>
+  <div class="menu" id="account-menu">
+    <button type="button" class="icon-btn" aria-label="บัญชีผู้ใช้" onclick="toggleMenu('account-menu', event)"><span class="avatar">{{ (user or '?')[:1] }}</span></button>
+    <div class="menu-pop">
+      <div class="menu-note">{{ user }} · {{ "ผู้ดูแล" if is_admin else "ผู้เยี่ยมชม" }}</div>
+      {% if ai_balance is defined %}<div class="menu-note">AI credit ${{ "%.2f"|format(ai_balance) }}</div>{% endif %}
+      <a href="/logout">{{ icon('logout') }}ออกจากระบบ</a>
+    </div>
+  </div>
+</header>
+
+<div class="app">
+  <main class="page">
+    {% block content %}{% endblock %}
+  </main>
+</div>
+
+<nav class="tabbar" aria-label="เมนูหลัก">
+  <a href="/" class="{{ 'active' if nav == 'txns' }}">{{ icon('list') }}รายการ<span class="dot" data-attention-count hidden></span></a>
+  <a href="/reports" class="{{ 'active' if nav == 'reports' }}">{{ icon('chart') }}ภาพรวม</a>
+  <a href="/chat" class="{{ 'active' if nav == 'chat' }}">{{ icon('chat') }}แชต</a>
+  {% if is_admin %}
+  <a href="/settings/categories" class="{{ 'active' if nav == 'categories' }}">{{ icon('tag') }}หมวด</a>
+  <a href="/audit" class="{{ 'active' if nav == 'audit' }}">{{ icon('history') }}ประวัติ</a>
+  {% endif %}
+</nav>
+{% block fab %}{% if is_admin and nav == 'txns' %}
+<a class="fab" href="/transactions/new" aria-label="เพิ่มรายการ">{{ icon('plus') }}</a>
+{% endif %}{% endblock %}
+
+<div class="toast-wrap" id="toast-wrap" aria-live="polite"></div>
+<script>
+function toggleMenu(id, e) {
+  e.stopPropagation();
+  document.querySelectorAll('.menu.open').forEach(m => { if (m.id !== id) m.classList.remove('open'); });
+  document.getElementById(id).classList.toggle('open');
+}
+document.addEventListener('click', (e) => {
+  document.querySelectorAll('.menu.open').forEach(m => { if (!m.contains(e.target)) m.classList.remove('open'); });
+});
+function toast(msg, isError = false) {
+  const el = document.createElement('div');
+  el.className = 'toast' + (isError ? ' error' : '');
+  el.textContent = msg;
+  document.getElementById('toast-wrap').appendChild(el);
+  setTimeout(() => el.remove(), isError ? 4500 : 2200);
+}
+</script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

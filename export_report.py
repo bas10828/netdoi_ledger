@@ -85,9 +85,9 @@ def write_excel(df: pd.DataFrame):
     summary = (
         df.groupby("ประเภท")["ยอดเงิน"]
         .sum()
-        .reindex(["expense", "income", "unknown"])
+        .reindex(["expense", "unknown"])
         .fillna(0)
-        .rename({"expense": "รายจ่าย", "income": "รายรับ", "unknown": "ไม่ระบุ"})
+        .rename({"expense": "รายจ่าย", "unknown": "ไม่ระบุประเภท"})
     )
     with pd.ExcelWriter(OUT_XLSX, engine="openpyxl") as writer:
         df.to_excel(writer, sheet_name="รายการ", index=False)
@@ -119,12 +119,11 @@ def build_pdf(df: pd.DataFrame, output):
     ]))
 
     total_expense = df.loc[df["ประเภท"] == "expense", "ยอดเงิน"].sum()
-    total_income = df.loc[df["ประเภท"] == "income", "ยอดเงิน"].sum()
 
     story = [
-        Paragraph("รายงานสรุปรายการเงิน (สลิปธนาคาร)", h1),
+        Paragraph("รายงานสรุปรายจ่าย (สลิปธนาคาร)", h1),
         Paragraph(f"จำนวนรายการทั้งหมด: {len(df)} รายการ", body),
-        Paragraph(f"รวมรายจ่าย: {total_expense:,.2f} บาท &nbsp;&nbsp; รวมรายรับ: {total_income:,.2f} บาท", body),
+        Paragraph(f"รวมรายจ่าย: {total_expense:,.2f} บาท", body),
         Spacer(1, 0.4 * cm),
         t,
     ]
@@ -134,7 +133,7 @@ def build_pdf(df: pd.DataFrame, output):
     ).build(story)
 
 
-def _bar_chart_drawing(labels, expense, income):
+def _bar_chart_drawing(labels, expense):
     width, height = 480, 220
     d = Drawing(width, height)
     chart = VerticalBarChart()
@@ -142,7 +141,7 @@ def _bar_chart_drawing(labels, expense, income):
     chart.y = 45
     chart.width = width - 70
     chart.height = height - 80
-    chart.data = [expense, income]
+    chart.data = [expense]
     chart.categoryAxis.categoryNames = labels
     chart.categoryAxis.labels.fontName = FONT
     chart.categoryAxis.labels.fontSize = 7
@@ -151,13 +150,8 @@ def _bar_chart_drawing(labels, expense, income):
     chart.valueAxis.labels.fontName = FONT
     chart.valueAxis.labels.fontSize = 7
     chart.bars[0].fillColor = colors.HexColor("#c0392b")
-    chart.bars[1].fillColor = colors.HexColor("#1e8449")
     chart.groupSpacing = 10
     d.add(chart)
-    d.add(Rect(width - 150, height - 14, 9, 9, fillColor=colors.HexColor("#c0392b"), strokeColor=None))
-    d.add(String(width - 137, height - 14, "รายจ่าย", fontName=FONT, fontSize=8))
-    d.add(Rect(width - 70, height - 14, 9, 9, fillColor=colors.HexColor("#1e8449"), strokeColor=None))
-    d.add(String(width - 57, height - 14, "รายรับ", fontName=FONT, fontSize=8))
     return d
 
 
@@ -186,7 +180,7 @@ def _pie_chart_drawing(category_rows):
     return d
 
 
-def build_summary_pdf(period_label, total_expense, total_income, net, category_rows, top_payees, bucket_chart, output):
+def build_summary_pdf(period_label, total_expense, category_rows, top_payees, bucket_chart, output):
     """Management summary (totals + bar/pie charts + category breakdown + top payees) for a single period."""
     styles = getSampleStyleSheet()
     h1 = ParagraphStyle("h1", parent=styles["Title"], fontName=FONT, fontSize=16, spaceAfter=10)
@@ -210,17 +204,12 @@ def build_summary_pdf(period_label, total_expense, total_income, net, category_r
 
     story = [
         Paragraph(f"รายงานสรุป — {period_label}", h1),
-        Paragraph(
-            f"รายจ่าย: {total_expense:,.2f} บาท &nbsp;&nbsp; "
-            f"รายรับ: {total_income:,.2f} บาท &nbsp;&nbsp; "
-            f"สุทธิ: {net:,.2f} บาท",
-            body,
-        ),
+        Paragraph(f"รายจ่ายรวม: {total_expense:,.2f} บาท", body),
     ]
 
     if bucket_chart["labels"]:
-        story.append(Paragraph("รายรับ-รายจ่ายตามช่วงเวลา", h2))
-        story.append(_bar_chart_drawing(bucket_chart["labels"], bucket_chart["expense"], bucket_chart["income"]))
+        story.append(Paragraph("รายจ่ายตามช่วงเวลา", h2))
+        story.append(_bar_chart_drawing(bucket_chart["labels"], bucket_chart["expense"]))
 
     pie = _pie_chart_drawing(category_rows)
     if pie:
