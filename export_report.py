@@ -171,20 +171,34 @@ def _month_end(d):
 
 def fetch_period_report(cur, d_from, d_to, today=None):
     """Everything the expense report shows for [d_from, d_to], compared against the
-    previous period: the prior calendar month when the range is exactly one month,
-    otherwise the equally long window right before it."""
+    previous period of the same kind: the day before, the prior calendar month, the
+    prior calendar year — or, for any other range, the equally long window before it."""
     today = today or datetime.now(BANGKOK_TZ).date()
     span = (d_to - d_from).days + 1
-    is_month = d_from.day == 1 and d_to == _month_end(d_from)
     prev_to = d_from - timedelta(days=1)
-    if is_month:
+    if span == 1:
+        kind = "day"
+        prev_from = prev_to
+        label = f"{d_from.day} {THAI_MONTHS_FULL[d_from.month]} {d_from.year}"
+        cur_head = fmt_date(d_from)
+        prev_label = prev_head = fmt_date(prev_from)
+    elif d_from.day == 1 and d_to == _month_end(d_from):
+        kind = "month"
         prev_from = prev_to.replace(day=1)
         label = f"{THAI_MONTHS_FULL[d_from.month]} {d_from.year}"
-        prev_label = f"{THAI_MONTHS[prev_from.month]} {prev_from.year}"
+        cur_head = THAI_MONTHS_FULL[d_from.month]
+        prev_label = prev_head = f"{THAI_MONTHS[prev_from.month]} {prev_from.year}"
+    elif (d_from.month, d_from.day, d_to.month, d_to.day) == (1, 1, 12, 31) and d_from.year == d_to.year:
+        kind = "year"
+        prev_from = date(d_from.year - 1, 1, 1)
+        label = cur_head = f"ปี {d_from.year}"
+        prev_label = prev_head = f"ปี {prev_from.year}"
     else:
+        kind = "custom"
         prev_from = prev_to - timedelta(days=span - 1)
         label = f"{fmt_date(d_from)} – {fmt_date(d_to)}"
         prev_label = f"{fmt_date(prev_from)} – {fmt_date(prev_to)}"
+        cur_head, prev_head = "ช่วงนี้", "ช่วงก่อน"
 
     categories = get_categories(cur)
     cat_order = {c["name"]: i for i, c in enumerate(categories)}
@@ -208,6 +222,7 @@ def fetch_period_report(cur, d_from, d_to, today=None):
         cat = category or UNCATEGORIZED
         t = {
             "date": t_date, "time": t_time.strftime("%H:%M") if t_time else "",
+            "hour": t_time.hour if t_time else None,
             "bank": bank or "", "direction": direction, "category": cat, "group": group_of(cat),
             "amount": float(amount or 0), "fee": float(fee or 0),
             "sender": sender or "", "receiver": receiver or "", "memo": memo or "",
@@ -262,8 +277,17 @@ def fetch_period_report(cur, d_from, d_to, today=None):
         g["single"] = len(g["cats"]) == 1 and g["cats"][0]["name"] == g["name"]
     group_list = sorted(groups.values(), key=lambda g: (-g["cur"], -g["prev"]))
 
-    # --- trend (daily up to ~2 months, monthly beyond) ----------------------
-    if span <= 62:
+    # --- trend (hourly for one day, daily up to ~2 months, monthly beyond) ---
+    if kind == "day":
+        trend_unit = "hour"
+        by_key = defaultdict(float)
+        for t in txns:
+            if t["hour"] is not None:
+                by_key[t["hour"]] += t["amount"]
+        first, last = min([8, *by_key]), max([18, *by_key])
+        trend = [{"key": h, "label": f"{h:02d}:00", "short": f"{h:02d}", "total": by_key[h]}
+                 for h in range(first, last + 1)]
+    elif span <= 62:
         trend_unit = "day"
         keys = [d_from + timedelta(days=i) for i in range(span)]
         by_key = defaultdict(float)
@@ -299,18 +323,29 @@ def fetch_period_report(cur, d_from, d_to, today=None):
 
     # --- KPIs ---------------------------------------------------------------
     partial = d_from <= today < d_to
-    days_elapsed = (today - d_from).days + 1 if partial else span
+    # Averages only count time the ledger has existed, so a range that starts before the
+    # first slip (e.g. the whole of its first year) isn't diluted by empty months — same
+    # rule as the /reports page.
+    cur.execute("SELECT MIN(txn_date) FROM slip_transactions")
+    ledger_start = cur.fetchone()[0] or d_from
+    avg_from, avg_to = max(d_from, ledger_start), min(today, d_to)
+    days_elapsed = max((avg_to - avg_from).days + 1, 1)
+    months_elapsed = max((avg_to.year - avg_from.year) * 12 + avg_to.month - avg_from.month + 1, 1)
     peak = max(trend, key=lambda b: b["total"]) if trend and total else None
+    if kind == "year":
+        avg = {"label": "เฉลี่ยต่อเดือน", "value": total / months_elapsed, "basis": f"คิดจาก {months_elapsed} เดือน"}
+    elif kind == "day":
+        avg = None
+    else:
+        avg = {"label": "เฉลี่ยต่อวัน", "value": total / days_elapsed, "basis": f"คิดจาก {days_elapsed} วัน"}
     kpi = {
         "total": total, "count": len(txns),
         "avg_txn": total / len(txns) if txns else 0.0,
-        "avg_day": total / days_elapsed if days_elapsed else 0.0,
-        "days": days_elapsed,
         "prev_total": prev_total, "prev_count": prev_count,
         "change": pct_change(total, prev_total), "diff": total - prev_total,
         "fees": sum(t["fee"] for t in txns),
         "payee_count": len(payees),
-        "peak": peak,
+        "peak": peak, "avg": avg,
         "review_count": len(review),
         "review_total": sum(t["amount"] for t in review),
         "uncategorized_count": sum(1 for t in review if t["direction"] == "expense"),
@@ -318,9 +353,12 @@ def fetch_period_report(cur, d_from, d_to, today=None):
     }
 
     return {
-        "from": d_from, "to": d_to, "span": span, "is_month": is_month, "partial": partial, "today": today,
-        "label": label, "range_label": f"{fmt_date(d_from)} – {fmt_date(d_to)}",
+        "from": d_from, "to": d_to, "span": span, "kind": kind, "partial": partial, "today": today,
+        "label": label, "range_label": fmt_date(d_from) if kind == "day" else f"{fmt_date(d_from)} – {fmt_date(d_to)}",
         "prev_from": prev_from, "prev_to": prev_to, "prev_label": prev_label,
+        "cur_head": cur_head, "prev_head": prev_head,
+        "trend_title": {"hour": "รายจ่ายรายชั่วโมง", "day": "รายจ่ายรายวัน", "month": "รายจ่ายรายเดือน"}[trend_unit],
+        "trend_unit_th": {"hour": "ชั่วโมง", "day": "วัน", "month": "เดือน"}[trend_unit],
         "generated_at": datetime.now(BANGKOK_TZ),
         "kpi": kpi, "groups": group_list, "trend": trend, "trend_unit": trend_unit,
         "top_payees": top_payees, "largest": largest, "txns": txns, "review": review,
@@ -355,14 +393,18 @@ def txns_by_category(rep):
 def change_word(rep):
     k = rep["kpi"]
     if k["change"] is None:
-        return f"ไม่มีข้อมูล{rep['prev_label']}ให้เทียบ"
+        return f"ไม่มีข้อมูล {rep['prev_label']} ให้เทียบ"
     direction = "เพิ่มขึ้น" if k["diff"] > 0 else "ลดลง"
     return f"{direction} {abs(k['change']):.1f}% ({fmt_baht(abs(k['diff']))} บาท) เทียบ {rep['prev_label']}"
 
 
 def report_filename(rep, ext):
-    if rep["is_month"]:
+    if rep["kind"] == "day":
+        return f"expense_report_{rep['from']:%Y-%m-%d}.{ext}"
+    if rep["kind"] == "month":
         return f"expense_report_{rep['from']:%Y-%m}.{ext}"
+    if rep["kind"] == "year":
+        return f"expense_report_{rep['from']:%Y}.{ext}"
     return f"expense_report_{rep['from']:%Y-%m-%d}_{rep['to']:%Y-%m-%d}.{ext}"
 
 
@@ -468,14 +510,16 @@ def _xl_summary_sheet(wb, rep, chart_ws):
         ("รายจ่ายรวม", k["total"], MONEY, "บาท"),
         ("จำนวนรายการ", k["count"], "#,##0", f"สลิป · ผู้รับ {k['payee_count']} ราย"),
         ("เฉลี่ยต่อรายการ", k["avg_txn"], MONEY, "บาท"),
-        ("เฉลี่ยต่อวัน", k["avg_day"], MONEY, f"บาท (คิดจาก {k['days']} วัน)"),
+    ]
+    if k["avg"]:
+        kpis.append((k["avg"]["label"], k["avg"]["value"], MONEY, f"บาท ({k['avg']['basis']})"))
+    kpis += [
         (f"ช่วงก่อนหน้า ({rep['prev_label']})", k["prev_total"], MONEY, f"บาท · {k['prev_count']} รายการ"),
         ("เปลี่ยนแปลง", (k["change"] / 100) if k["change"] is not None else "–", PCT_SIGNED,
          f"{'+' if k['diff'] > 0 else ''}{fmt_baht(k['diff'])} บาท"),
     ]
     if k["peak"]:
-        unit = "วัน" if rep["trend_unit"] == "day" else "เดือน"
-        kpis.append((f"{unit}ที่จ่ายมากที่สุด", k["peak"]["total"], MONEY, k["peak"]["label"]))
+        kpis.append((f"{rep['trend_unit_th']}ที่จ่ายมากที่สุด", k["peak"]["total"], MONEY, k["peak"]["label"]))
     if k["fees"]:
         kpis.append(("ค่าธรรมเนียมโอนรวม", k["fees"], MONEY, "บาท"))
     for label, value, fmt, note in kpis:
@@ -511,8 +555,7 @@ def _xl_summary_sheet(wb, rep, chart_ws):
 
     # --- group / category table ----------------------------------------------
     row = _xl_section(ws, row + 1, "แยกตามกลุ่มและหมวด", last)
-    row = _xl_header(ws, row, ["กลุ่ม / หมวด", "จำนวน", rep["label"] if rep["is_month"] else "ช่วงนี้",
-                               rep["prev_label"] if rep["is_month"] else "ช่วงก่อน", "เปลี่ยนแปลง", "สัดส่วน"],
+    row = _xl_header(ws, row, ["กลุ่ม / หมวด", "จำนวน", rep["cur_head"], rep["prev_head"], "เปลี่ยนแปลง", "สัดส่วน"],
                      "lrrrrr")
     table_top = row
 
@@ -600,7 +643,7 @@ def _xl_summary_sheet(wb, rep, chart_ws):
         n = len(rep["trend"])
         bar = BarChart()
         bar.type = "col"
-        bar.title = "รายจ่ายรายวัน" if rep["trend_unit"] == "day" else "รายจ่ายรายเดือน"
+        bar.title = rep["trend_title"]
         bar.add_data(Reference(chart_ws, min_col=5, min_row=1, max_row=n + 1), titles_from_data=True)
         bar.set_categories(Reference(chart_ws, min_col=4, min_row=2, max_row=n + 1))
         bar.series[0].graphicalProperties.solidFill = C_ACCENT
@@ -630,7 +673,7 @@ def _xl_chart_data_sheet(wb, rep):
     for i, (name, value, _) in enumerate(slices, start=2):
         _put(ws, i, 1, f"{name}  {value / total * 100:.0f}%")
         _put(ws, i, 2, value, fmt=MONEY)
-    _put(ws, 1, 4, "วันที่" if rep["trend_unit"] == "day" else "เดือน", _f(9, True))
+    _put(ws, 1, 4, rep["trend_unit_th"], _f(9, True))
     _put(ws, 1, 5, "รายจ่าย (บาท)", _f(9, True))
     for i, b in enumerate(rep["trend"], start=2):
         _put(ws, i, 4, b["short"])
@@ -964,10 +1007,17 @@ def _pdf_kpis(rep):
     cards = [
         ("รายจ่ายรวม (บาท)", fmt_baht(k["total"]), change),
         ("จำนวนรายการ", f"{k['count']:,}", f"ผู้รับ {k['payee_count']} ราย · เฉลี่ย {k['avg_txn']:,.0f}/รายการ"),
-        (f"{escape(rep['prev_label'])} (บาท)" if rep["is_month"] else "ช่วงก่อนหน้า (บาท)",
+        (f"{escape(rep['prev_label'])} (บาท)" if rep["kind"] != "custom" else "ช่วงก่อนหน้า (บาท)",
          fmt_baht(k["prev_total"]), f"{k['prev_count']} รายการ"),
-        ("เฉลี่ยต่อวัน (บาท)", fmt_baht(k["avg_day"]), peak or f"คิดจาก {k['days']} วัน"),
     ]
+    if k["avg"]:
+        cards.append((f"{k['avg']['label']} (บาท)", fmt_baht(k["avg"]["value"]), peak or k["avg"]["basis"]))
+    elif rep["largest"]:
+        big = rep["largest"][0]
+        cards.append(("รายการใหญ่สุด (บาท)", fmt_baht(big["amount"]),
+                      escape(wrap_text(big["receiver"] or UNKNOWN_PAYEE, FONT, 7.5, 110, max_lines=1)[0])))
+    else:
+        cards.append(("รายการใหญ่สุด (บาท)", fmt_baht(0), "–"))
     gap = 6
     card_w = (CONTENT_W - gap * 3) / 4
     cells, widths = [], []
@@ -1122,22 +1172,24 @@ def _pdf_trend(rep):
     chart.barSpacing = 0
     chart.groupSpacing = 3 if many else 8
     d.add(chart)
-    # dashed average line
-    avg = rep["kpi"]["total"] / len(trend)
-    y = chart.y + avg / vmax * chart.height
-    d.add(Line(chart.x, y, chart.x + chart.width, y, strokeColor=_hex(C_UP), strokeWidth=0.8, strokeDashArray=[3, 2]))
-    unit = "วัน" if rep["trend_unit"] == "day" else "เดือน"
-    d.add(String(chart.x + chart.width, y + 3, f"เฉลี่ย {avg:,.0f}/{unit}", fontName=FONT, fontSize=7,
-                 fillColor=_hex(C_UP), textAnchor="end"))
+    # Dashed average line — same basis as the KPI card when its unit matches the bars
+    # (so a month still in progress isn't averaged over days that haven't happened).
+    if rep["trend_unit"] != "hour":
+        k = rep["kpi"]
+        matches = k["avg"] and (rep["trend_unit"], rep["kind"]) in (("day", "month"), ("day", "custom"), ("month", "year"))
+        avg = k["avg"]["value"] if matches else k["total"] / len(trend)
+        y = chart.y + avg / vmax * chart.height
+        d.add(Line(chart.x, y, chart.x + chart.width, y, strokeColor=_hex(C_UP), strokeWidth=0.8, strokeDashArray=[3, 2]))
+        d.add(String(chart.x + chart.width, y + 3, f"เฉลี่ย {avg:,.0f}/{rep['trend_unit_th']}", fontName=FONT, fontSize=7,
+                     fillColor=_hex(C_UP), textAnchor="end"))
     return d
 
 
 def _pdf_breakdown(rep):
     k = rep["kpi"]
     widths = [CONTENT_W - 330, 40, 75, 75, 55, 85]
-    head_cur = "ช่วงนี้" if not rep["is_month"] else rep["label"].split()[0]
-    rows = [[P("กลุ่ม / หมวด", "head"), P("รายการ", "head_r"), P(head_cur, "head_r"),
-             P(rep["prev_label"] if rep["is_month"] else "ช่วงก่อน", "head_r"), P("เปลี่ยน", "head_r"), P("สัดส่วน", "head")]]
+    rows = [[P("กลุ่ม / หมวด", "head"), P("รายการ", "head_r"), P(rep["cur_head"], "head_r"),
+             P(rep["prev_head"], "head_r"), P("เปลี่ยน", "head_r"), P("สัดส่วน", "head")]]
     style = _base_table_style()
 
     def add(name, d, bold=False, indent=False, bg=None):
@@ -1277,8 +1329,7 @@ def build_report_pdf(rep, output):
         story += [KeepTogether([Paragraph("สัดส่วนรายจ่ายตามกลุ่ม", ST["h2"]), pie])]
     trend = _pdf_trend(rep)
     if trend:
-        title = "รายจ่ายรายวัน" if rep["trend_unit"] == "day" else "รายจ่ายรายเดือน"
-        story += [KeepTogether([Paragraph(title, ST["h2"]), trend])]
+        story += [KeepTogether([Paragraph(rep["trend_title"], ST["h2"]), trend])]
 
     story += [CondPageBreak(5 * cm), Paragraph("แยกตามกลุ่มและหมวด", ST["h2"]),
               Paragraph(f"เทียบกับ {escape(rep['prev_label'])} · สีแดง = จ่ายเพิ่มขึ้น, สีเขียว = จ่ายลดลง", ST["muted"]),

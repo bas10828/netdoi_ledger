@@ -12,12 +12,13 @@
     border: none; border-left: 1px solid var(--border); border-right: 1px solid var(--border);
     padding: 0 12px; height: 34px; font-weight: 700; background: var(--surface); cursor: pointer; outline: none;
   }
-  .export-pop { width: 260px; padding: 12px; }
+  .export-pop { width: 300px; padding: 12px; }
   .export-pop h4 { margin: 0 0 6px; font-size: 12px; color: var(--muted); font-weight: 600; }
   .export-pop .r { display: flex; gap: 6px; margin-bottom: 12px; }
   .export-pop .r:last-child { margin-bottom: 0; }
-  .export-pop .r .btn { flex: 1; justify-content: center; }
-  .export-pop input[type=date] { flex: 1; min-width: 0; padding: 6px 8px; border: 1px solid var(--border-strong); border-radius: 6px; font-size: 12px; }
+  .export-pop .r .btn { flex: 0 0 auto; justify-content: center; }
+  .export-pop .r:last-child .btn { flex: 1; }
+  .export-pop input, .export-pop select { flex: 1; min-width: 0; padding: 6px 8px; border: 1px solid var(--border-strong); border-radius: 6px; font-size: 12px; background: var(--surface); color: var(--text); }
 
   .section { padding: 20px 22px; margin-bottom: 16px; }
   .section-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
@@ -139,10 +140,25 @@
     <div class="menu" id="export-menu">
       <button type="button" class="btn" onclick="toggleMenu('export-menu', event)">{{ icon('download') }}<span class="hide-mobile">Export</span></button>
       <div class="menu-pop export-pop">
-        <h4>{{ cur_label }}</h4>
+        <h4>รายวัน</h4>
         <div class="r">
-          <button type="button" class="btn" onclick="exportReport('excel', '{{ cur_from }}', '{{ cur_to }}')">Excel</button>
-          <button type="button" class="btn" onclick="exportReport('pdf', '{{ cur_from }}', '{{ cur_to }}')">PDF</button>
+          <input type="date" id="x-day" value="{{ export_day }}" aria-label="วันที่">
+          <button type="button" class="btn" onclick="exportDay('excel')">Excel</button>
+          <button type="button" class="btn" onclick="exportDay('pdf')">PDF</button>
+        </div>
+        <h4>รายเดือน</h4>
+        <div class="r">
+          <input type="month" id="x-month" value="{{ selected_month }}" aria-label="เดือน">
+          <button type="button" class="btn" onclick="exportMonth('excel')">Excel</button>
+          <button type="button" class="btn" onclick="exportMonth('pdf')">PDF</button>
+        </div>
+        <h4>รายปี</h4>
+        <div class="r">
+          <select id="x-year" aria-label="ปี">
+            {% for yv in export_years %}<option value="{{ yv }}" {% if yv == selected_month[:4]|int %}selected{% endif %}>{{ yv }}</option>{% endfor %}
+          </select>
+          <button type="button" class="btn" onclick="exportYear('excel')">Excel</button>
+          <button type="button" class="btn" onclick="exportYear('pdf')">PDF</button>
         </div>
         <h4>กำหนดช่วงเอง</h4>
         <div class="r">
@@ -224,6 +240,24 @@
 function exportReport(kind, from, to) {
   document.getElementById('export-menu').classList.remove('open');
   location.href = `/reports/export/${kind}?` + new URLSearchParams({ date_from: from, date_to: to });
+}
+
+function exportDay(kind) {
+  const d = document.getElementById('x-day').value;
+  if (d) exportReport(kind, d, d);
+}
+
+function exportMonth(kind) {
+  const v = document.getElementById('x-month').value;
+  if (!v) return;
+  const [y, m] = v.split('-').map(Number);
+  const last = new Date(y, m, 0).getDate();
+  exportReport(kind, `${v}-01`, `${v}-${String(last).padStart(2, '0')}`);
+}
+
+function exportYear(kind) {
+  const y = document.getElementById('x-year').value;
+  if (y) exportReport(kind, `${y}-01-01`, `${y}-12-31`);
 }
 
 function exportCustom(kind) {

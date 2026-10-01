@@ -440,6 +440,9 @@ def reports(request: Request, month: str = "", focus: str = "all"):
                 {"value": f"{oy:04d}-{om:02d}", "label": _month_label(oy, om)}
                 for oy, om in sorted(month_opts, reverse=True)
             ],
+            "export_years": sorted({oy for oy, _ in month_opts}, reverse=True),
+            # Today when viewing the current month, otherwise that month's last day.
+            "export_day": min(today, data["cur_to"]).isoformat(),
             "focus": focus,
             # Embedded in a <script> tag and carries free-text memos — escape "<" so a
             # memo containing "</script>" can't break out of it.
