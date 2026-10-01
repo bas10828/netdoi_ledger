@@ -1047,15 +1047,22 @@ def _pdf_header(rep):
         lines = wrap_text("เฉพาะ: " + scope_text(rep), FONT_BOLD, 10, CONTENT_W * 0.6 - 28, max_lines=2)
         scope = '<br/><font name="%s" size="10" color="#93C5FD">%s</font>' % (
             FONT_BOLD, "<br/>".join(escape(x) for x in lines))
+    return header_band(
+        REPORT_TITLE, rep["label"], scope,
+        [f"ช่วงวันที่ {escape(rep['range_label'])}", f"เทียบกับ {escape(rep['prev_label'])}",
+         f"จัดทำเมื่อ {fmt_date(gen.date())} {gen:%H:%M} น."],
+    )
+
+
+def header_band(kicker, title, extra_markup, meta_lines):
+    """Dark title band at the top of page 1: kicker + big title on the left, meta lines on the right."""
     title = Paragraph(
-        f'<font size="9" color="#9CA3AF">{REPORT_TITLE.upper()}</font><br/>'
-        f'<font name="{FONT_BOLD}" size="22" color="#FFFFFF">{escape(rep["label"])}</font>{scope}',
+        f'<font size="9" color="#9CA3AF">{escape(kicker.upper())}</font><br/>'
+        f'<font name="{FONT_BOLD}" size="22" color="#FFFFFF">{escape(title)}</font>{extra_markup}',
         _ps("hdr_t", fontName=FONT, fontSize=22, leading=28, textColor=colors.white),
     )
     meta = Paragraph(
-        f"ช่วงวันที่ {escape(rep['range_label'])}<br/>"
-        f"เทียบกับ {escape(rep['prev_label'])}<br/>"
-        f"จัดทำเมื่อ {fmt_date(gen.date())} {gen:%H:%M} น.",
+        "<br/>".join(meta_lines),
         _ps("hdr_m", fontName=FONT, fontSize=8, leading=12, textColor=_hex("D1D5DB"), alignment=TA_RIGHT),
     )
     t = Table([[title, meta]], colWidths=[CONTENT_W * 0.6, CONTENT_W * 0.4])
@@ -1095,8 +1102,13 @@ def _pdf_kpis(rep):
                       escape(wrap_text(big["receiver"] or UNKNOWN_PAYEE, FONT, 7.5, 110, max_lines=1)[0])))
     else:
         cards.append(("รายการใหญ่สุด (บาท)", fmt_baht(0), "–"))
+    return kpi_cards(cards)
+
+
+def kpi_cards(cards):
+    """A row of up to four KPI cards; each card is (label, value, sub) markup."""
     gap = 6
-    card_w = (CONTENT_W - gap * 3) / 4
+    card_w = (CONTENT_W - gap * (len(cards) - 1)) / len(cards)
     cells, widths = [], []
     for i, (label, value, sub) in enumerate(cards):
         cells.append([

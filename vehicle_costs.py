@@ -206,3 +206,102 @@ def build_page_data(path=FUEL_LOG):
             "missing_liters": sum(v["missing_liters"] or 0 for v in vehicles),
         },
     }
+
+
+# ---------------------------------------------------------------------------
+# Bank slips vs receipts
+# ---------------------------------------------------------------------------
+
+# Memo keywords that name a vehicle when the slip's category doesn't.
+VEHICLE_KEYWORDS = [("vigo", "Vigo"), ("revo", "Revo"), ("d-max", "Dmax"), ("dmax", "Dmax"), ("รถตู้", "รถตู้")]
+# A slip paid straight to a station is the fill itself, so it must fall on the receipt's date
+# (±1 day for late-night fills). A transfer to a person reimburses a fill made up to this
+# many days earlier.
+REIMBURSE_WINDOW_DAYS = 7
+
+
+def _is_station(slip):
+    return slip["receiver"].upper().startswith(("PTTST", "PTT ", "PT ", "BANGCHAK", "SHELL", "CALTEX"))
+
+
+STATUS = {
+    "matched": "ตรงกัน",
+    "vehicle_mismatch": "ลงชื่อรถในบัญชีไม่ตรงกับใบเสร็จ",
+    "slip_only": "มีสลิปโอน ไม่มีใบกำกับภาษี",
+    "receipt_only": "มีใบเสร็จ ไม่พบสลิปโอน",
+    "before_ledger": "ก่อนเริ่มบันทึกสลิป",
+}
+
+
+def fetch_fuel_slips(cur):
+    """Fuel purchases recorded from bank slips (engine oil and other non-fuel 'น้ำมัน' excluded)."""
+    cur.execute(
+        """SELECT id, txn_date, amount, category, receiver_name, memo
+           FROM slip_transactions
+           WHERE direction = 'expense'
+             AND (category LIKE 'ค่าน้ำมัน%%' OR memo ILIKE '%%เติมน้ำมัน%%' OR memo ILIKE '%%ค่าน้ำมัน%%')
+             AND COALESCE(memo, '') NOT ILIKE '%%น้ำมันเครื่อง%%'
+           ORDER BY txn_date"""
+    )
+    slips = []
+    for sid, d, amount, category, receiver, memo in cur.fetchall():
+        vehicle = None
+        if category and " - " in category:
+            vehicle = category.split(" - ", 1)[1].strip()
+        if not vehicle:
+            text = (memo or "").lower()
+            vehicle = next((v for kw, v in VEHICLE_KEYWORDS if kw in text), None)
+        slips.append({"id": sid, "date": d.isoformat(), "amount": float(amount), "category": category or "",
+                      "receiver": receiver or "", "memo": memo or "", "vehicle": vehicle})
+    return slips
+
+
+def reconcile(fills, slips):
+    """Line bank slips up with logged fills on one timeline. Station slips are matched first
+    (same amount, same day), then reimbursements to people (same amount, fill on or up to
+    REIMBURSE_WINDOW_DAYS before the transfer); within those, the same vehicle wins, then the
+    nearest date. A fill logged only from a bank slip (no receipt) means the slip has no receipt."""
+    ledger_start = min((s["date"] for s in slips), default=None)
+    claimed = set()
+    rows = []
+
+    def window_ok(slip, fill):
+        gap = (_d(slip["date"]) - _d(fill["date"])).days
+        return abs(gap) <= 1 if _is_station(slip) else 0 <= gap <= REIMBURSE_WINDOW_DAYS
+
+    for s in sorted(slips, key=lambda s: (not _is_station(s), s["date"])):
+        sd = _d(s["date"])
+        cands = [(i, f) for i, f in enumerate(fills)
+                 if i not in claimed and abs(f["amount"] - s["amount"]) < 0.5 and window_ok(s, f)]
+        cands.sort(key=lambda c: (bool(s["vehicle"]) and c[1]["vehicle"] != s["vehicle"],
+                                  abs((_d(c[1]["date"]) - sd).days)))
+        if not cands:
+            rows.append({"date": s["date"], "vehicle": s["vehicle"] or "ไม่ระบุรถ", "amount": s["amount"],
+                         "fill": None, "slip": s, "status": "slip_only"})
+            continue
+        i, f = cands[0]
+        claimed.add(i)
+        if f["estimated"]:
+            status = "slip_only"
+        elif s["vehicle"] and s["vehicle"] != f["vehicle"]:
+            status = "vehicle_mismatch"
+        else:
+            status = "matched"
+        rows.append({"date": f["date"], "vehicle": f["vehicle"], "amount": f["amount"], "fill": f, "slip": s,
+                     "status": status})
+    for i, f in enumerate(fills):
+        if i in claimed:
+            continue
+        status = "receipt_only" if ledger_start and f["date"] >= ledger_start else "before_ledger"
+        rows.append({"date": f["date"], "vehicle": f["vehicle"], "amount": f["amount"], "fill": f, "slip": None,
+                     "status": status})
+    rows.sort(key=lambda r: r["date"], reverse=True)
+    for r in rows:
+        r["status_label"] = STATUS[r["status"]]
+    counts = {k: sum(1 for r in rows if r["status"] == k) for k in STATUS}
+    gap = {k: sum(r["amount"] for r in rows if r["status"] == k) for k in STATUS}
+    return {"rows": rows, "counts": counts, "amounts": gap, "ledger_start": ledger_start}
+
+
+def _d(s):
+    return date.fromisoformat(s)

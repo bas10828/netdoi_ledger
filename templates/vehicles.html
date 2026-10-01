@@ -38,6 +38,21 @@
   .chip.on { background: var(--accent); border-color: var(--accent); color: #fff; }
   .more-btn { border: none; background: var(--surface-2); color: var(--text); font-weight: 600; font-size: 13px; padding: 8px 14px; border-radius: 8px; cursor: pointer; margin-top: 10px; }
   .empty { padding: 40px; text-align: center; color: var(--muted); }
+  .recon-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 14px; }
+  .rs { border-radius: var(--radius); padding: 10px 12px; background: var(--surface-2); display: flex; flex-direction: column; gap: 2px; }
+  .rs b { font-size: 20px; }
+  .rs span { font-size: 12px; font-weight: 600; }
+  .rs small { font-size: 11px; color: var(--muted); }
+  .rs.ok b { color: var(--income); }
+  .rs.bad { background: var(--expense-soft); } .rs.bad b { color: var(--expense); }
+  .rs.warn { background: var(--warn-soft); } .rs.warn b { color: var(--warn); }
+  .st { display: inline-block; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
+  .st.matched { background: var(--income-soft); color: var(--income); }
+  .st.slip_only { background: var(--expense-soft); color: var(--expense); }
+  .st.receipt_only, .st.vehicle_mismatch { background: var(--warn-soft); color: var(--warn); }
+  .st.before_ledger { background: var(--surface-2); color: var(--muted); }
+  .sub2 { display: block; font-size: 11px; color: var(--muted); }
+  @media (max-width: 900px) { .recon-stats { grid-template-columns: repeat(2, 1fr); } }
   @media (max-width: 900px) {
     .kpis { grid-template-columns: repeat(2, 1fr); }
     .kpi:nth-child(2) { border-right: none; }
@@ -50,7 +65,11 @@
 {% block content %}
 <div class="page-head">
   <h1>ต้นทุนรถ</h1>
-  {% if data %}<span class="sub">จากใบกำกับภาษีและรูปเลขไมล์ · {{ data.kpi.first_date }} ถึง {{ data.kpi.last_date }} · {{ data.kpi.fills }} ครั้ง</span>{% endif %}
+  {% if data %}<span class="sub">จากใบกำกับภาษีและรูปเลขไมล์ · {{ data.kpi.first_date }} ถึง {{ data.kpi.last_date }} · {{ data.kpi.fills }} ครั้ง</span>
+  <div class="actions">
+    <a class="btn" href="/vehicles/export/pdf">{{ icon('download') }}PDF</a>
+    <a class="btn" href="/vehicles/export/excel">{{ icon('download') }}Excel</a>
+  </div>{% endif %}
 </div>
 
 {% if not data %}
@@ -180,6 +199,28 @@
 </section>
 {% endif %}
 
+{% set tl = data.timeline %}
+<section class="card section">
+  <div class="section-head">
+    <h2>สลิปโอน เทียบ ใบเสร็จ</h2>
+    <span class="hint">จับคู่สลิปค่าน้ำมันในบัญชี (ตั้งแต่ {{ tl.ledger_start }}) กับใบเสร็จ ด้วยยอดเงิน + วันที่ + รถ</span>
+  </div>
+  <div class="recon-stats">
+    <div class="rs ok"><b>{{ tl.counts.matched }}</b><span>ตรงกัน</span></div>
+    <div class="rs bad"><b>{{ tl.counts.slip_only }}</b><span>มีสลิป ไม่มีใบกำกับภาษี</span><small>{{ tl.amounts.slip_only|baht }} บาท</small></div>
+    <div class="rs warn"><b>{{ tl.counts.receipt_only }}</b><span>มีใบเสร็จ ไม่พบสลิป</span><small>{{ tl.amounts.receipt_only|baht }} บาท · จ่ายเงินสด/บัตร/QR ส่วนตัว?</small></div>
+    <div class="rs warn"><b>{{ tl.counts.vehicle_mismatch }}</b><span>ลงชื่อรถไม่ตรง</span></div>
+  </div>
+  <div class="chips" id="tl-chips" style="margin-bottom:10px"></div>
+  <div class="scroll">
+    <table class="grid">
+      <thead><tr><th class="l">วันที่</th><th class="l">รถ</th><th>ยอด</th><th class="l">ใบเสร็จ</th><th class="l">สลิปโอน</th><th class="l">สถานะ</th></tr></thead>
+      <tbody id="tl-rows"></tbody>
+    </table>
+  </div>
+  <button type="button" class="more-btn" id="tl-more" hidden>แสดงทั้งหมด</button>
+</section>
+
 <section class="card section">
   <div class="section-head">
     <h2>ประวัติการเติม</h2>
@@ -288,6 +329,62 @@ function renderFills() {
 }
 document.getElementById('fill-more').onclick = () => { showAll = true; renderFills(); };
 renderFills();
+
+// --- slip vs receipt timeline --------------------------------------------------
+const TL_FILTERS = [
+  ['problems', 'ต้องดู', r => !['matched', 'before_ledger'].includes(r.status)],
+  ['ledger', 'ช่วงที่มีสลิปทั้งหมด', r => r.status !== 'before_ledger'],
+  ['all', 'ทั้งหมด', () => true],
+];
+let tlFilter = 'problems', tlAll = false;
+const tlChips = document.getElementById('tl-chips');
+TL_FILTERS.forEach(([key, label]) => {
+  const b = document.createElement('button');
+  b.type = 'button'; b.className = 'chip'; b.dataset.k = key; b.textContent = label;
+  b.onclick = () => { tlFilter = key; tlAll = false; renderTimeline(); };
+  tlChips.appendChild(b);
+});
+
+function twoLine(main, sub) {
+  const td = document.createElement('td');
+  td.className = 'l wrap';
+  td.textContent = main;
+  if (sub) { const s = document.createElement('span'); s.className = 'sub2'; s.textContent = sub; td.appendChild(s); }
+  return td;
+}
+
+function renderTimeline() {
+  tlChips.querySelectorAll('.chip').forEach(c => c.classList.toggle('on', c.dataset.k === tlFilter));
+  const test = TL_FILTERS.find(f => f[0] === tlFilter)[2];
+  const rows = V.timeline.filter(test);
+  const shown = tlAll ? rows : rows.slice(0, 30);
+  document.getElementById('tl-rows').replaceChildren(...shown.map(r => {
+    const tr = document.createElement('tr');
+    const f = r.fill && !r.fill.estimated ? r.fill : null;
+    const st = document.createElement('td');
+    st.className = 'l';
+    const pill = document.createElement('span');
+    pill.className = 'st ' + r.status; pill.textContent = r.status_label;
+    st.appendChild(pill);
+    tr.append(
+      cell(r.date, 'l'), cell(r.vehicle, 'l'), cell(baht(r.amount)),
+      f ? twoLine(f.station, f.liters ? `${f.liters.toFixed(1)} ลิตร · ${f.date}` : f.date) : cell('—', 'l muted'),
+      r.slip ? twoLine(r.slip.receiver, `${r.slip.date} · ${r.slip.memo}`) : cell('—', 'l muted'),
+      st,
+    );
+    return tr;
+  }));
+  const more = document.getElementById('tl-more');
+  more.hidden = tlAll || rows.length <= 30;
+  more.textContent = `แสดงทั้งหมด (${rows.length})`;
+  if (!rows.length) {
+    const tr = document.createElement('tr');
+    const td = cell('ไม่มีรายการ', 'l muted'); td.colSpan = 6; tr.appendChild(td);
+    document.getElementById('tl-rows').appendChild(tr);
+  }
+}
+document.getElementById('tl-more').onclick = () => { tlAll = true; renderTimeline(); };
+renderTimeline();
 </script>
 {% endif %}
 {% endblock %}

@@ -415,6 +415,12 @@ def vehicles_view(request: Request):
     data = vehicle_costs.build_page_data()
     page_json = None
     if data:
+        conn = db()
+        try:
+            with conn.cursor() as cur:
+                data["timeline"] = vehicle_costs.reconcile(data["fills"], vehicle_costs.fetch_fuel_slips(cur))
+        finally:
+            conn.close()
         page_json = json.dumps(
             {
                 "vehicles": [v["name"] for v in data["vehicles"]],
@@ -424,10 +430,57 @@ def vehicles_view(request: Request):
                                        "station", "estimated")} | {"issue": vehicle_costs.issue_of(f)}
                     for f in reversed(data["fills"])
                 ],
+                "timeline": [
+                    {
+                        "date": r["date"], "vehicle": r["vehicle"], "amount": r["amount"], "status": r["status"],
+                        "status_label": r["status_label"],
+                        "fill": r["fill"] and {k: r["fill"][k] for k in ("date", "station", "liters", "estimated")},
+                        "slip": r["slip"] and {k: r["slip"][k] for k in ("id", "date", "receiver", "memo")},
+                    }
+                    for r in data["timeline"]["rows"]
+                ],
             },
             ensure_ascii=False,
         ).replace("<", "\\u003c")
     return render_page(request, "vehicles.html", "vehicles", {"data": data, "page_json": page_json})
+
+
+@app.get("/vehicles/export/{kind}")
+def vehicles_export(request: Request, kind: str):
+    redirect = require_login(request)
+    if redirect:
+        return redirect
+    if kind not in ("excel", "pdf"):
+        raise HTTPException(404)
+    import vehicle_costs
+
+    try:
+        import vehicle_export
+    except RuntimeError as e:
+        raise HTTPException(500, str(e))
+
+    data = vehicle_costs.build_page_data()
+    if not data:
+        raise HTTPException(404, "ยังไม่มีข้อมูล vehicle_fuel_log.csv")
+    conn = db()
+    try:
+        with conn.cursor() as cur:
+            data["timeline"] = vehicle_costs.reconcile(data["fills"], vehicle_costs.fetch_fuel_slips(cur))
+    finally:
+        conn.close()
+
+    buf = io.BytesIO()
+    if kind == "excel":
+        vehicle_export.build_vehicle_xlsx(data, buf)
+        ext, media_type = "xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    else:
+        vehicle_export.build_vehicle_pdf(data, buf)
+        ext, media_type = "pdf", "application/pdf"
+    buf.seek(0)
+    return StreamingResponse(
+        buf, media_type=media_type,
+        headers={"Content-Disposition": f'attachment; filename="{vehicle_export.export_filename(data, ext)}"'},
+    )
 
 
 @app.get("/reports")
