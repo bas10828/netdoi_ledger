@@ -1,0 +1,52 @@
+date,vehicle,plate,fuel_type,fuel_product,price_per_l,liters,amount,odometer_km,odometer_note,station
+2025-10-21,รถตู้,ยจ746,benzine,Gasohol 91,32.42,46.268,1500.00,,no odometer photo,ปิยะพรเจริญกิจ แม่สาย
+2025-12-17,รถตู้,ยจ746,benzine,Gasohol 95,32.79,45.746,1500.00,285519,,ปิยะพรเจริญกิจ แม่สาย
+2026-01-08,รถตู้,ยจ746,benzine,Gasohol 95,32.29,46.454,1500.00,,286551 photo may belong to this fill or 2026-02-11,ปิยะพรเจริญกิจ แม่สาย
+2026-02-11,รถตู้,ยจ746,benzine,Gasohol 95,31.79,31.456,1000.00,286551,photo order ambiguous (see 2026-01-08),ปิยะพรเจริญกิจ แม่สาย
+2026-04-20,รถตู้,ยจ746,benzine,Gasohol 95,43.34,34.610,1500.00,286871,glare - reading uncertain,ปิยะพรเจริญกิจ แม่สาย
+2026-05-22,รถตู้,ยจ746,benzine,Gasohol 95,45.79,43.678,2000.00,287166,,ปิยะพรเจริญกิจ แม่สาย
+2026-06-11,รถตู้,ยจ746,benzine,Gasohol 95,43.96,22.750,1000.00,287440,,ปิ่นพัฒนโชติ ออย แม่จัน
+2026-06-29,รถตู้,ยจ746,benzine,Gasohol 95,38.99,12.824,500.00,287691,,เชียงแสนเอ็นเนอร์จี
+2026-08-03,รถตู้,ยจ746,benzine,,,,1000.00,,bank slip only - no tax invoice or odometer photo,ปิยะพรเจริญกิจ แม่สาย
+2026-09-08,รถตู้,ยจ746,benzine,Gasohol 91,38.86,12.867,500.00,288085,,ปิยะพรเจริญกิจ แม่สาย
+2025-03-28,Revo,ยต9797,diesel,PT Max Diesel,33.35,29.99,1000.00,133264,handwritten on receipt,PT แม่จัน5
+2025-03-31,Revo,ยต9797,diesel,PT Max Diesel,33.35,29.99,1000.00,133538,handwritten on receipt; plate printed ยค7979,PT แม่จัน
+2025-04-04,Revo,ยต9797,diesel,PT Max Diesel,32.79,30.50,1000.00,133928,handwritten on receipt,PT เชียงราย5
+2025-04-09,Revo,ยต9797,diesel,Hi Diesel S B7,32.85,30.44,1000.00,134334,handwritten on receipt,ชาญสกุลปิโตรเลียม แม่จัน
+2025-04-20,Revo,ยต9797,diesel,Hi Diesel S B7,32.85,30.44,1000.00,135129,handwritten on receipt,ชาญสกุลปิโตรเลียม แม่จัน
+2025-04-30,Revo,ยต9797,diesel,PT Max Gasohol 95,33.70,29.67,985.00,135860,ANOMALY: gasohol 95 on a diesel vehicle's tax invoice - verify; handwritten km,PT ถ.เลี่ยงเมืองเชียงราย
+2025-05-07,Revo,ยต9797,diesel,PT Max Diesel,32.85,60.88,2000.00,136235,handwritten on receipt; plate printed ยต7979,PT ดอยตุง
+2025-05-13,Revo,ยต9797,diesel,PT Max Diesel,32.85,30.44,1000.00,136969,handwritten on receipt,PT แม่จัน
+2025-05-16,Revo,ยต9797,diesel,PT Max Diesel,32.88,30.41,1000.00,137347,handwritten on receipt; plate printed ยต-7979,PT แม่สาย
+2025-05-24,Revo,ยต9797,diesel,Diesel,32.88,30.414,1000.00,138126,handwritten on receipt,ปิยะพรเจริญกิจ แม่สาย
+2025-05-29,Revo,ยต9797,diesel,Diesel,32.88,30.414,1000.00,138421,dash photo (paired by album order),ปิยะพรเจริญกิจ แม่สาย
+2025-06-04,Revo,ยต9797,diesel,Diesel,32.79,30.497,1000.00,138804,handwritten + dash photo agree,มิสตางค์ สเตชั่น เชียงราย
+2025-06-09,Revo,ยต9797,diesel,Diesel,32.85,67.880,2230.00,139162,handwritten + dash photo agree,ปิ่นพัฒนโชติ ออย แม่จัน
+2025-06-19,Revo,ยต9797,diesel,Diesel,32.88,60.827,2000.00,139994,handwritten on receipt,ปิยะพรเจริญกิจ แม่สาย
+2025-06-26,Revo,ยต9797,diesel,PT Max Diesel,32.78,61.01,2000.00,140724,dash photo (paired by album order),PT เวียงป่าเป้า3
+2025-07-07,Revo,ยต9797,diesel,PT Max Diesel,32.88,60.83,2000.00,,no odometer reading,PT แม่สาย
+2025-07-15,Revo,ยต9797,diesel,Caltex Diesel B7,32.78,30.51,1000.00,,no odometer reading,Caltex เวียงป่าเป้า
+2025-07-18,Revo,ยต9797,diesel,Diesel,32.85,30.440,1000.00,142232,dash photo (paired by album order),ปิ่นพัฒนโชติ ออย แม่จัน
+2025-08-14,Revo,ยต9797,diesel,Diesel,32.93,60.735,2000.00,143996,dash photo (paired by album order),เชียงแสนเอ็นเนอร์จี
+2025-09-19,Revo,ยต9797,diesel,Diesel,32.79,47.800,1567.40,,no odometer reading,ไพบูลย์สุวรรณ เชียงราย
+2025-10-27,Revo,ยต9797,diesel,Diesel,31.88,53.325,1700.00,,no odometer reading,ปิยะพรเจริญกิจ แม่สาย
+2025-11-20,Revo,ยต9797,diesel,Diesel,31.88,65.872,2100.00,,plate printed ยต7979; no odometer reading,ปิยะพรเจริญกิจ แม่สาย
+2025-12-19,Revo,ยต9797,diesel,Diesel,31.79,47.185,1500.00,,dash photo shows 1488xx (last digits unreadable),เชียงราย (ชื่อปั๊มอ่านไม่ชัด)
+2026-01-26,Revo,ยต9797,diesel,Diesel,30.79,48.717,1500.00,,no odometer reading,ทีเอ็นดับเบิลยู ปิโตร เชียงราย
+2026-03-28,Revo,ยต9797,diesel,ดีเซลหมุนเร็ว,40.18,24.89,1000.00,154976,two receipts same day (M269000562 + M269000567); dash photo,ยอดเหนือปิโตรเลียม แม่สาย
+2026-03-28,Revo,ยต9797,diesel,ดีเซลหมุนเร็ว,40.18,24.89,1000.00,,second receipt same day - verify not a duplicate,ยอดเหนือปิโตรเลียม แม่สาย
+2026-04-12,Revo,ยต9797,diesel,Diesel,45.36,33.070,1500.00,,no odometer reading,ปิยะพงศ์ปิโตรเลียม เชียงใหม่
+2026-04-30,Revo,ยต9797,diesel,Diesel,41.09,48.674,2000.00,,no odometer reading,ปิยะพรเจริญกิจ แม่สาย
+2026-05-12,Revo,ยต9797,diesel,Diesel,40.84,48.972,2000.00,,dash 157281/158499 near here but pairing ambiguous,ปิยะพรเจริญกิจ แม่สาย
+2026-05-21,Revo,ยต9797,diesel,Diesel,43.09,46.414,2000.00,,dash 157281/158499 near here but pairing ambiguous,ปิยะพรเจริญกิจ แม่สาย
+2026-06-05,Revo,ยต9797,diesel,Diesel,42.36,35.410,1500.00,,dash 159733 near here but pairing ambiguous,ปิ่นพัฒนโชติ ออย แม่จัน
+2026-06-13,Revo,ยต9797,diesel,Diesel,40.69,49.152,2000.00,,dash 159733 near here but pairing ambiguous,ปิยะพรเจริญกิจ แม่สาย
+2026-06-19,Revo,ยต9797,diesel,Diesel,38.39,52.097,2000.00,,no odometer reading,ปิยะพรเจริญกิจ แม่สาย
+2026-07-06,Revo,ยต9797,diesel,Diesel,38.39,52.097,2000.00,,dash 161557 belongs to 07-06 or 07-14,ปิยะพรเจริญกิจ แม่สาย
+2026-07-14,Revo,ยต9797,diesel,Diesel,35.88,55.741,2000.00,,dash 161557/162259 pairing ambiguous,ปิยะพรเจริญกิจ แม่สาย
+2026-07-31,Revo,ยต9797,diesel,Diesel,37.63,39.862,1500.00,,dash 162259 belongs to 07-14 or 07-31,ปิยะพรเจริญกิจ แม่สาย
+2026-08-17,Revo,ยต9797,diesel,,,,1000.00,,bank slip only - no tax invoice photo,ปิ่นพัฒนโชติ ออย แม่จัน
+2026-09-02,Revo,ยต9797,diesel,Diesel,40.05,49.940,2000.00,164252,dash photo (paired by album order),ปิ่นพัฒนโชติ ออย แม่จัน
+2026-09-12,Revo,ยต9797,diesel,,,,1500.00,,bank slip only - no tax invoice photo,ปิยะพรเจริญกิจ แม่สาย
+2026-09-25,Revo,ยต9797,diesel,Diesel,42.38,47.192,2000.00,165903,paid cash (not in bank ledger); dash photo,ปิยะพรเจริญกิจ แม่สาย
+2026-02-03,Dmax,ยจ8629,diesel,Diesel,30.85,64.830,2000.00,,found in the Revo album,ปิ่นพัฒนโชติ ออย แม่จัน

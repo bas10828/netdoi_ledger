@@ -15,3 +15,4 @@ update_roles.sql
 add_*.sql
 expense_report_*.xlsx
 expense_report_*.pdf
+car/
