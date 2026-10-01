@@ -412,15 +412,16 @@ def vehicles_view(request: Request):
         return redirect
     import vehicle_costs
 
-    data = vehicle_costs.build_page_data()
+    conn = db()
+    try:
+        with conn.cursor() as cur:
+            data = vehicle_costs.build_page_data(cur)
+            if data:
+                data["timeline"] = vehicle_costs.reconcile(data["fills"], vehicle_costs.fetch_fuel_slips(cur))
+    finally:
+        conn.close()
     page_json = None
     if data:
-        conn = db()
-        try:
-            with conn.cursor() as cur:
-                data["timeline"] = vehicle_costs.reconcile(data["fills"], vehicle_costs.fetch_fuel_slips(cur))
-        finally:
-            conn.close()
         page_json = json.dumps(
             {
                 "vehicles": [v["name"] for v in data["vehicles"]],
@@ -460,15 +461,16 @@ def vehicles_export(request: Request, kind: str):
     except RuntimeError as e:
         raise HTTPException(500, str(e))
 
-    data = vehicle_costs.build_page_data()
-    if not data:
-        raise HTTPException(404, "ยังไม่มีข้อมูล vehicle_fuel_log.csv")
     conn = db()
     try:
         with conn.cursor() as cur:
-            data["timeline"] = vehicle_costs.reconcile(data["fills"], vehicle_costs.fetch_fuel_slips(cur))
+            data = vehicle_costs.build_page_data(cur)
+            if data:
+                data["timeline"] = vehicle_costs.reconcile(data["fills"], vehicle_costs.fetch_fuel_slips(cur))
     finally:
         conn.close()
+    if not data:
+        raise HTTPException(404, "ยังไม่มีข้อมูลการเติมน้ำมัน")
 
     buf = io.BytesIO()
     if kind == "excel":

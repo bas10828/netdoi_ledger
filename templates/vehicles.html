@@ -85,7 +85,7 @@
 </div>
 
 {% if not data %}
-<div class="card empty">ยังไม่มีข้อมูล — เพิ่มไฟล์ vehicle_fuel_log.csv</div>
+<div class="card empty">ยังไม่มีข้อมูลการเติมน้ำมัน (ตาราง vehicle_fuel_fills)</div>
 {% else %}
 {% set k = data.kpi %}
 {% set d_now = data.latest_price.get('diesel') %}

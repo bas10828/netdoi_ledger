@@ -1,17 +1,14 @@
-"""Per-vehicle fuel cost analysis from vehicle_fuel_log.csv.
+"""Per-vehicle fuel cost analysis from the vehicle_fuel_fills table.
 
-The CSV is hand-maintained from tax-invoice and odometer photos (one row per fill);
+The table is filled by hand from tax-invoice and odometer photos (one row per fill);
 this module turns it into what the /vehicles page shows: per-vehicle efficiency,
 monthly spend, how much of the spend is down to pump-price changes, and rows that
 need a human to check them.
 """
 
-import csv
 from collections import defaultdict
 from datetime import date
-from pathlib import Path
 
-FUEL_LOG = Path(__file__).with_name("vehicle_fuel_log.csv")
 
 # Fills before this date set the "normal" price each fuel type is compared against.
 PRICE_BASELINE_END = "2026-03-01"
@@ -39,19 +36,21 @@ def _num(v):
     return float(v) if v not in (None, "") else None
 
 
-def load_fills(path=FUEL_LOG):
-    if not path.exists():
-        return []
-    fills = []
-    with open(path, encoding="utf-8") as f:
-        for r in csv.DictReader(f):
-            fills.append({
-                "date": r["date"], "vehicle": r["vehicle"], "plate": r["plate"], "fuel_type": r["fuel_type"],
-                "product": r["fuel_product"], "price": _num(r["price_per_l"]), "liters": _num(r["liters"]),
-                "amount": _num(r["amount"]) or 0.0, "odometer": _num(r["odometer_km"]),
-                "note": r["odometer_note"], "station": r["station"],
-            })
-    fills.sort(key=lambda x: (x["date"], x["vehicle"]))
+def load_fills(cur):
+    cur.execute(
+        """SELECT fill_date, vehicle, plate, fuel_type, fuel_product, price_per_l, liters, amount,
+                  odometer_km, note, station
+           FROM vehicle_fuel_fills
+           ORDER BY fill_date, vehicle, id"""
+    )
+    fills = [
+        {
+            "date": d.isoformat(), "vehicle": vehicle, "plate": plate, "fuel_type": fuel_type, "product": product,
+            "price": _num(price), "liters": _num(liters), "amount": _num(amount) or 0.0, "odometer": _num(odo),
+            "note": note, "station": station,
+        }
+        for d, vehicle, plate, fuel_type, product, price, liters, amount, odo, note, station in cur.fetchall()
+    ]
     _estimate_missing_liters(fills)
     return fills
 
@@ -243,8 +242,8 @@ def usage_vs_price(fills, vehicles):
     }
 
 
-def build_page_data(path=FUEL_LOG):
-    fills = load_fills(path)
+def build_page_data(cur):
+    fills = load_fills(cur)
     if not fills:
         return None
     vehicles, latest_price = vehicle_summary(fills)
