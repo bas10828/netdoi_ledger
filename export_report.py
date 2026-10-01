@@ -328,12 +328,14 @@ def fetch_period_report(cur, d_from, d_to, today=None):
 
 
 def pie_slices(rep):
-    """Group totals for the share chart: the biggest PIE_SLICES groups, the rest lumped as 'อื่นๆ'."""
+    """Group totals for the share chart: every group if they fit the palette, otherwise the
+    biggest PIE_SLICES groups with the rest lumped into one grey slice."""
     groups = [g for g in rep["groups"] if g["cur"] > 0]
-    slices = [(g["name"], g["cur"], "#" + PALETTE[i]) for i, g in enumerate(groups[:PIE_SLICES])]
-    rest = sum(g["cur"] for g in groups[PIE_SLICES:])
+    shown = len(groups) if len(groups) <= len(PALETTE) else PIE_SLICES
+    slices = [(g["name"], g["cur"], "#" + PALETTE[i]) for i, g in enumerate(groups[:shown])]
+    rest = sum(g["cur"] for g in groups[shown:])
     if rest:
-        slices.append((f"กลุ่มอื่นรวม {len(groups) - PIE_SLICES} กลุ่ม", rest, "#" + OTHER_COLOR))
+        slices.append((f"กลุ่มอื่นรวม {len(groups) - shown} กลุ่ม", rest, "#" + OTHER_COLOR))
     return slices
 
 
@@ -615,6 +617,8 @@ def _xl_summary_sheet(wb, rep, chart_ws):
 
     ws.freeze_panes = "A3"
     _xl_print_setup(ws, rep)
+    # Charts sit beside the table; printing them would shrink the table to fit the page width.
+    ws.print_area = f"A1:F{row}"
 
 
 def _xl_chart_data_sheet(wb, rep):
@@ -1315,9 +1319,18 @@ def build_pdf(df, output):
     weights = {"รายละเอียด": 3, "ผู้รับ": 2.2, "ผู้โอน": 2.2, "หมวด": 1.8}
     raw = [weights.get(h, 1) for h in header]
     widths = [page_w * w / sum(raw) for w in raw]
-    table_data = [[P(h, "head") for h in header]]
+    money = {"ยอดเงิน", "ค่าธรรมเนียม"}
+    table_data = [[P(h, "head_r" if h in money else "head") for h in header]]
     for r in rows:
-        table_data.append([PW(v, widths[i]) for i, v in enumerate(r)])
+        cells = []
+        for h, v, w in zip(header, r, widths):
+            if h in money and v:
+                cells.append(P(fmt_baht(float(v)), "cell_r"))
+            elif h == "เวลา":
+                cells.append(P(v[:5], "cell_muted"))
+            else:
+                cells.append(PW(v, w))
+        table_data.append(cells)
 
     t = Table(table_data, colWidths=widths, repeatRows=1)
     t.setStyle(TableStyle(_base_table_style() + [
