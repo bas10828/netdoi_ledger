@@ -50,3 +50,58 @@ date,vehicle,plate,fuel_type,fuel_product,price_per_l,liters,amount,odometer_km,
 2026-09-12,Revo,ยต9797,diesel,,,,1500.00,,bank slip only - no tax invoice photo,ปิยะพรเจริญกิจ แม่สาย
 2026-09-25,Revo,ยต9797,diesel,Diesel,42.38,47.192,2000.00,165903,paid cash (not in bank ledger); dash photo,ปิยะพรเจริญกิจ แม่สาย
 2026-02-03,Dmax,ยจ8629,diesel,Diesel,30.85,64.830,2000.00,,found in the Revo album,ปิ่นพัฒนโชติ ออย แม่จัน
+2025-06-30,Vigo,ผจ7222,diesel,Hi Diesel S,32.88,68.43,2250.00,313858,dash photo (paired by album order),สกก.แม่สาย
+2025-07-23,Vigo,ผจ7222,diesel,PT Max Diesel,32.88,60.83,2000.00,,plate printed ผต7222,PT แม่สาย
+2025-08-05,Vigo,ผจ7222,diesel,Diesel,32.88,60.827,2000.00,,,ปิยะพรเจริญกิจ แม่สาย
+2025-08-15,Vigo,ผจ7222,diesel,Diesel,32.93,60.735,2000.00,,,เชียงแสนเอ็นเนอร์จี
+2025-09-03,Vigo,ผจ7222,diesel,PT Max Diesel,32.79,60.99,2000.00,,,PT เชียงราย5
+2025-09-18,Vigo,ผจ7222,diesel,Diesel,32.93,60.735,2000.00,,,เชียงแสนเอ็นเนอร์จี
+2025-10-09,Vigo,ผจ7222,diesel,Diesel,32.29,61.938,2000.00,,,เคยูออยล์ เชียงราย
+2025-10-21,Vigo,ผจ7222,diesel,Diesel,31.88,62.735,2000.00,,,ปิยะพรเจริญกิจ แม่สาย
+2025-10-28,Vigo,ผจ7222,diesel,Diesel,31.93,62.637,2000.00,,,เชียงแสนเอ็นเนอร์จี
+2025-11-05,Vigo,ผจ7222,diesel,Diesel,31.88,62.735,2000.00,,TAX INVOICE ISSUED TO ANOTHER COMPANY (หจก.ราภาสา 0503539000408),ปิยะพรเจริญกิจ แม่สาย
+2025-11-11,Vigo,ผจ7222,diesel,Diesel,31.93,62.637,2000.00,,,เชียงแสนเอ็นเนอร์จี
+2025-11-20,Vigo,ผจ7222,diesel,Diesel,31.85,62.790,2000.00,,,ปิ่นพัฒนโชติ ออย แม่จัน
+2025-12-02,Vigo,ผจ7222,diesel,Diesel,31.88,47.051,1500.00,,,ปิยะพรเจริญกิจ แม่สาย
+2025-12-11,Vigo,ผจ7222,diesel,Diesel,31.79,47.180,1500.00,,,ไพบูลย์สุวรรณ เชียงราย
+2025-12-16,Vigo,ผจ7222,diesel,Diesel,31.85,62.790,2000.00,,,ปิ่นพัฒนโชติ ออย แม่จัน
+2025-12-30,Vigo,ผจ7222,diesel,Diesel,31.29,47.939,1500.00,,TAX INVOICE ISSUED TO ANOTHER COMPANY (หจก.ราภาสา 0503539000408),พระแท่นบริการ เชียงราย
+2026-01-08,Vigo,ผจ7222,diesel,Diesel,31.29,63.918,2000.00,,,พระแท่นบริการ เชียงราย
+2026-01-14,Vigo,ผจ7222,diesel,Diesel,30.88,48.575,1500.00,,,ปิยะพรเจริญกิจ แม่สาย
+2026-01-21,Vigo,ผจ7222,diesel,Diesel,30.93,48.497,1500.00,,,เชียงแสนเอ็นเนอร์จี
+2026-02-05,Vigo,ผจ7222,diesel,Diesel,30.79,48.717,1500.00,,,ทีเอ็นดับเบิลยู ปิโตร เชียงราย
+2026-02-16,Vigo,ผจ7222,diesel,Diesel,30.85,48.620,1500.00,,,ปิ่นพัฒนโชติ ออย แม่จัน
+2026-02-25,Vigo,ผจ7222,diesel,Diesel,30.75,48.780,1500.00,,,พีดับเบิ้ลยู สเตชั่น ป่าแดด
+2026-03-02,Vigo,ผจ7222,diesel,Diesel,30.85,48.620,1500.00,,,ปิ่นพัฒนโชติ ออย แม่จัน
+2026-03-17,Vigo,ผจ7222,diesel,Diesel,30.79,16.239,500.00,,3 fills in 56 min at 3 stations (12:02),ปิยะอัคร เอนเนอร์จี เชียงราย
+2026-03-17,Vigo,ผจ7222,diesel,Diesel,30.79,16.240,500.00,,3 fills in 56 min at 3 stations (12:20),ไพบูลย์สุวรรณ เชียงราย
+2026-03-17,Vigo,ผจ7222,diesel,Diesel,30.85,16.210,500.00,,3 fills in 56 min at 3 stations (12:58),ปิ่นพัฒนโชติ ออย แม่จัน
+2026-03-23,Vigo,ผจ7222,diesel,ดีเซลหมุนเร็ว,32.28,15.49,500.00,,paid cash,ยอดเหนือปิโตรเลียม ป่ายาง แม่สาย
+2026-03-24,Vigo,ผจ7222,diesel,Diesel,33.78,14.800,500.00,,TAX INVOICE ISSUED TO ANOTHER COMPANY (หจก.ราภาสา 0503539000408),เชียงรายกิตติรัตน์ เวียงป่าเป้า
+2026-03-25,Vigo,ผจ7222,diesel,PT Max Diesel B7,33.79,14.80,500.00,,handwritten bill without plate; liters/amount match the 03-24 fill - verify not a duplicate claim,ฤทธิ์อนันต์ ปิโตรเลียม แม่สรวย
+2026-03-27,Vigo,ผจ7222,diesel,PT Max Diesel,39.85,39.15,1540.00,,no plate printed on receipt,PT แม่จัน8
+2026-04-21,Vigo,ผจ7222,diesel,Diesel,42.50,47.059,2000.00,,,ปิยะอัคร เอนเนอร์จี เชียงราย
+2026-04-30,Vigo,ผจ7222,diesel,Diesel,40.97,48.816,2000.00,,,หลักรุ่งทรัพย์ พาน
+2026-05-09,Vigo,ผจ7222,diesel,Diesel,40.84,48.972,2000.00,,,ปิยะพรเจริญกิจ แม่สาย
+2026-05-20,Vigo,ผจ7222,diesel,Diesel,43.18,46.320,2000.00,,,เชียงของเอ็นเนอร์จี999
+2026-05-23,Vigo,ผจ7222,diesel,Diesel,43.14,46.361,2000.00,,,เชียงแสนเอ็นเนอร์จี
+2026-05-28,Vigo,ผจ7222,diesel,Diesel,41.98,47.642,2000.00,335857,dash photo (paired by album order),ทุ่นแสงเอเซอร์วิส พะเยา
+2026-06-06,Vigo,ผจ7222,diesel,Diesel,41.69,47.973,2000.00,,,ปิยะพรเจริญกิจ แม่สาย
+2026-06-22,Vigo,ผจ7222,diesel,Diesel,38.48,51.980,2000.00,,,เชียงของเอ็นเนอร์จี999
+2026-06-30,Vigo,ผจ7222,diesel,Diesel,38.25,52.288,2000.00,,,OR ดอยสะเก็ด
+2026-07-06,Vigo,ผจ7222,diesel,Diesel,38.26,52.274,2000.00,,dash 33773x (last digit unclear),พีดับเบิ้ลยู สเตชั่น ป่าแดด
+2026-07-22,Vigo,ผจ7222,diesel,,,,2000.00,,bank slip only (reimbursement) - no tax invoice photo,
+2026-07-23,Vigo,ผจ7222,diesel,Diesel,37.54,53.277,2000.00,,,มิสตางค์ สเตชั่น เชียงราย
+2026-07-27,Vigo,ผจ7222,diesel,,,,2000.00,,bank slip only (reimbursement) - no tax invoice photo,
+2026-08-03,Vigo,ผจ7222,diesel,Diesel,37.63,53.149,2000.00,339112,dash photo (paired by album order); not in bank ledger,ปิยะพรเจริญกิจ แม่สาย
+2026-08-13,Vigo,ผจ7222,diesel,Diesel,38.45,52.010,2000.00,,,ปิ่นพัฒนโชติ ออย แม่จัน
+2026-08-19,Vigo,ผจ7222,diesel,Diesel,39.24,50.970,1950.00,,50 baht discount,ไพบูลย์สุวรรณ เชียงราย
+2026-08-24,Vigo,ผจ7222,diesel,Diesel,39.24,50.968,2000.00,,paid by credit card; not in bank ledger,ดับเบิ้ล นายน์ สเตชั่น เชียงราย
+2026-08-27,Vigo,ผจ7222,diesel,Diesel,39.17,51.060,2000.00,,not in bank ledger,เคทีที กรุ๊ป2019 เชียงม่วน พะเยา
+2026-09-02,Vigo,ผจ7222,diesel,Diesel,40.05,49.940,2000.00,,,ปิ่นพัฒนโชติ ออย แม่จัน
+2026-09-04,Vigo,ผจ7222,diesel,Diesel,40.08,49.900,2000.00,,,ปิยะพรเจริญกิจ แม่สาย
+2026-09-14,Vigo,ผจ7222,diesel,Diesel,40.75,49.080,2000.00,343453,dash photo (paired by album order); not in bank ledger,ปิ่นพัฒนโชติ ออย แม่จัน
+2026-09-17,Vigo,ผจ7222,diesel,Diesel,41.54,24.070,1000.00,343993,dash photo (paired by album order); not in bank ledger,แม่สรวยปิโตรเลียม แม่สรวย
+2026-09-30,Vigo,ผจ7222,diesel,Diesel,42.38,47.192,2000.00,344683,paid by credit card; not in bank ledger,ปิยะพรเจริญกิจ แม่สาย
+2025-08-23,Revo,ยต9797,diesel,Diesel,32.88,60.827,2000.00,,found in the Vigo album,ปิยะพรเจริญกิจ แม่สาย
+2025-10-16,Revo,ยต9797,diesel,Diesel,32.35,61.820,2000.00,,found in the Vigo album,ปิ่นพัฒนโชติ ออย แม่จัน
