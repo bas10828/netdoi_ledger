@@ -12,13 +12,26 @@
     border: none; border-left: 1px solid var(--border); border-right: 1px solid var(--border);
     padding: 0 12px; height: 34px; font-weight: 700; background: var(--surface); cursor: pointer; outline: none;
   }
-  .export-pop { width: 300px; padding: 12px; }
-  .export-pop h4 { margin: 0 0 6px; font-size: 12px; color: var(--muted); font-weight: 600; }
-  .export-pop .r { display: flex; gap: 6px; margin-bottom: 12px; }
-  .export-pop .r:last-child { margin-bottom: 0; }
-  .export-pop .r .btn { flex: 0 0 auto; justify-content: center; }
-  .export-pop .r:last-child .btn { flex: 1; }
-  .export-pop input, .export-pop select { flex: 1; min-width: 0; padding: 6px 8px; border: 1px solid var(--border-strong); border-radius: 6px; font-size: 12px; background: var(--surface); color: var(--text); }
+  .export-pop { width: 320px; max-width: calc(100vw - 32px); padding: 14px; }
+  .export-pop .xp-title { font-weight: 700; font-size: 14px; margin-bottom: 10px; }
+  .export-pop .xp-seg { display: flex; background: var(--bg); border-radius: 8px; padding: 3px; gap: 2px; margin-bottom: 12px; }
+  .export-pop .xp-seg button { flex: 1; width: auto; justify-content: center; padding: 6px 4px; font-size: 12px; font-weight: 600; color: var(--muted); border-radius: 6px; }
+  .export-pop .xp-seg button.on { background: var(--surface); color: var(--text); box-shadow: var(--shadow-sm); }
+  .export-pop .xp-pane { margin-bottom: 10px; }
+  .export-pop .xp-pane[hidden] { display: none; }
+  .export-pop .xp-two { display: flex; gap: 8px; }
+  .export-pop label { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 0; font-size: 12px; color: var(--muted); font-weight: 600; }
+  .export-pop input, .export-pop select { width: 100%; padding: 8px 10px; border: 1px solid var(--border-strong); border-radius: 8px; font-size: 13px; background: var(--surface); color: var(--text); font-family: inherit; }
+  .export-pop .xp-summary { font-size: 12px; color: var(--muted); background: var(--accent-soft); color: var(--accent); border-radius: 8px; padding: 8px 10px; margin-bottom: 10px; font-weight: 600; }
+  .export-pop .xp-summary.bad { background: var(--warn-soft); color: var(--warn); }
+  .export-pop .xp-dl { gap: 12px; padding: 10px; border: 1px solid var(--border); margin-top: 6px; align-items: center; }
+  .export-pop .xp-dl:hover { border-color: var(--accent); background: var(--accent-soft); }
+  .export-pop .xp-dl:disabled { opacity: .45; pointer-events: none; }
+  .export-pop .xp-dl b { display: block; font-size: 13px; }
+  .export-pop .xp-dl small { display: block; font-size: 11px; color: var(--muted); margin-top: 1px; }
+  .export-pop .xp-badge { flex: 0 0 auto; width: 38px; height: 38px; border-radius: 8px; display: grid; place-items: center; font-size: 11px; font-weight: 800; color: #fff; }
+  .export-pop .xp-badge.pdf { background: #c8372d; }
+  .export-pop .xp-badge.xls { background: #15803d; }
 
   .section { padding: 20px 22px; margin-bottom: 16px; }
   .section-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
@@ -140,35 +153,39 @@
     <div class="menu" id="export-menu">
       <button type="button" class="btn" onclick="toggleMenu('export-menu', event)">{{ icon('download') }}<span class="hide-mobile">Export</span></button>
       <div class="menu-pop export-pop">
-        <h4>รายวัน</h4>
-        <div class="r">
-          <input type="date" id="x-day" value="{{ export_day }}" aria-label="วันที่">
-          <button type="button" class="btn" onclick="exportDay('excel')">Excel</button>
-          <button type="button" class="btn" onclick="exportDay('pdf')">PDF</button>
+        <div class="xp-title">ดาวน์โหลดรายงาน</div>
+        <div class="xp-seg" role="tablist" aria-label="ช่วงรายงาน">
+          <button type="button" data-kind="day" onclick="setExportKind('day')">รายวัน</button>
+          <button type="button" data-kind="month" class="on" onclick="setExportKind('month')">รายเดือน</button>
+          <button type="button" data-kind="year" onclick="setExportKind('year')">รายปี</button>
+          <button type="button" data-kind="custom" onclick="setExportKind('custom')">กำหนดเอง</button>
         </div>
-        <h4>รายเดือน</h4>
-        <div class="r">
-          <input type="month" id="x-month" value="{{ selected_month }}" aria-label="เดือน">
-          <button type="button" class="btn" onclick="exportMonth('excel')">Excel</button>
-          <button type="button" class="btn" onclick="exportMonth('pdf')">PDF</button>
+        <div class="xp-pane" data-pane="day" hidden>
+          <label>วันที่<input type="date" id="x-day" value="{{ export_day }}" oninput="updateExportSummary()"></label>
         </div>
-        <h4>รายปี</h4>
-        <div class="r">
-          <select id="x-year" aria-label="ปี">
+        <div class="xp-pane" data-pane="month">
+          <label>เดือน<select id="x-month" onchange="updateExportSummary()">
+            {% for o in month_options %}<option value="{{ o.value }}" {% if o.value == selected_month %}selected{% endif %}>{{ o.label }}</option>{% endfor %}
+          </select></label>
+        </div>
+        <div class="xp-pane" data-pane="year" hidden>
+          <label>ปี<select id="x-year" onchange="updateExportSummary()">
             {% for yv in export_years %}<option value="{{ yv }}" {% if yv == selected_month[:4]|int %}selected{% endif %}>{{ yv }}</option>{% endfor %}
-          </select>
-          <button type="button" class="btn" onclick="exportYear('excel')">Excel</button>
-          <button type="button" class="btn" onclick="exportYear('pdf')">PDF</button>
+          </select></label>
         </div>
-        <h4>กำหนดช่วงเอง</h4>
-        <div class="r">
-          <input type="date" id="x-from" value="{{ cur_from }}" aria-label="ตั้งแต่">
-          <input type="date" id="x-to" value="{{ cur_to }}" aria-label="ถึง">
+        <div class="xp-pane xp-two" data-pane="custom" hidden>
+          <label>ตั้งแต่<input type="date" id="x-from" value="{{ cur_from }}" oninput="updateExportSummary()"></label>
+          <label>ถึง<input type="date" id="x-to" value="{{ cur_to }}" oninput="updateExportSummary()"></label>
         </div>
-        <div class="r">
-          <button type="button" class="btn" onclick="exportCustom('excel')">Excel</button>
-          <button type="button" class="btn" onclick="exportCustom('pdf')">PDF</button>
-        </div>
+        <div class="xp-summary" id="x-summary"></div>
+        <button type="button" class="xp-dl" data-dl onclick="downloadReport('pdf')">
+          <span class="xp-badge pdf">PDF</span>
+          <span><b>รายงานสรุป (PDF)</b><small>สรุปพร้อมกราฟ สำหรับอ่าน พิมพ์ หรือส่งต่อ</small></span>
+        </button>
+        <button type="button" class="xp-dl" data-dl onclick="downloadReport('excel')">
+          <span class="xp-badge xls">XLS</span>
+          <span><b>ตารางข้อมูล (Excel)</b><small>ทุกรายการ กรองและคำนวณต่อได้</small></span>
+        </button>
       </div>
     </div>
   </div>
@@ -237,34 +254,53 @@
 {% endblock %}
 {% block scripts %}
 <script>
-function exportReport(kind, from, to) {
+const TH_MONTHS = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
+let exportKind = 'month';
+
+function thDate(iso) {
+  const [y, m, d] = iso.split('-').map(Number);
+  return `${d} ${TH_MONTHS[m - 1]} ${y}`;
+}
+
+// [from, to] as ISO dates for the picked report kind, or null when incomplete.
+function exportRange() {
+  const val = (id) => document.getElementById(id).value;
+  if (exportKind === 'day') return val('x-day') ? [val('x-day'), val('x-day')] : null;
+  if (exportKind === 'month') {
+    const v = val('x-month');
+    if (!v) return null;
+    const [y, m] = v.split('-').map(Number);
+    return [`${v}-01`, `${v}-${String(new Date(y, m, 0).getDate()).padStart(2, '0')}`];
+  }
+  if (exportKind === 'year') return val('x-year') ? [`${val('x-year')}-01-01`, `${val('x-year')}-12-31`] : null;
+  return val('x-from') && val('x-to') ? [val('x-from'), val('x-to')] : null;
+}
+
+function setExportKind(kind) {
+  exportKind = kind;
+  document.querySelectorAll('.xp-seg button').forEach(b => b.classList.toggle('on', b.dataset.kind === kind));
+  document.querySelectorAll('.xp-pane').forEach(p => { p.hidden = p.dataset.pane !== kind; });
+  updateExportSummary();
+}
+
+function updateExportSummary() {
+  const r = exportRange();
+  const bad = !r || r[0] > r[1];
+  const el = document.getElementById('x-summary');
+  el.classList.toggle('bad', bad);
+  el.textContent = !r ? 'เลือกวันที่ให้ครบก่อน'
+    : bad ? 'วันเริ่มต้องไม่หลังวันสิ้นสุด'
+    : 'ช่วงรายงาน: ' + (r[0] === r[1] ? thDate(r[0]) : `${thDate(r[0])} – ${thDate(r[1])}`);
+  document.querySelectorAll('[data-dl]').forEach(b => { b.disabled = bad; });
+}
+
+function downloadReport(fmt) {
+  const r = exportRange();
+  if (!r || r[0] > r[1]) return;
   document.getElementById('export-menu').classList.remove('open');
-  location.href = `/reports/export/${kind}?` + new URLSearchParams({ date_from: from, date_to: to });
+  location.href = `/reports/export/${fmt}?` + new URLSearchParams({ date_from: r[0], date_to: r[1] });
 }
-
-function exportDay(kind) {
-  const d = document.getElementById('x-day').value;
-  if (d) exportReport(kind, d, d);
-}
-
-function exportMonth(kind) {
-  const v = document.getElementById('x-month').value;
-  if (!v) return;
-  const [y, m] = v.split('-').map(Number);
-  const last = new Date(y, m, 0).getDate();
-  exportReport(kind, `${v}-01`, `${v}-${String(last).padStart(2, '0')}`);
-}
-
-function exportYear(kind) {
-  const y = document.getElementById('x-year').value;
-  if (y) exportReport(kind, `${y}-01-01`, `${y}-12-31`);
-}
-
-function exportCustom(kind) {
-  const from = document.getElementById('x-from').value;
-  const to = document.getElementById('x-to').value;
-  if (from && to) exportReport(kind, from, to);
-}
+updateExportSummary();
 
 
 const R = {{ report_json|safe }};
