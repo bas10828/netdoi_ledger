@@ -1,0 +1,208 @@
+"""Per-vehicle fuel cost analysis from vehicle_fuel_log.csv.
+
+The CSV is hand-maintained from tax-invoice and odometer photos (one row per fill);
+this module turns it into what the /vehicles page shows: per-vehicle efficiency,
+monthly spend, how much of the spend is down to pump-price changes, and rows that
+need a human to check them.
+"""
+
+import csv
+from collections import defaultdict
+from datetime import date
+from pathlib import Path
+
+FUEL_LOG = Path(__file__).with_name("vehicle_fuel_log.csv")
+
+# Fills before this date set the "normal" price each fuel type is compared against.
+PRICE_BASELINE_END = "2026-03-01"
+
+# Above this, a km/L figure means fills are missing from the log rather than a frugal engine.
+PLAUSIBLE_MAX_KM_PER_L = {"diesel": 16.0, "benzine": 13.0}
+FUEL_LABEL = {"diesel": "ดีเซล", "benzine": "เบนซิน"}
+
+# Note fragments that mean a row needs a human to look at it, and how to describe it.
+ISSUE_RULES = [
+    ("ANOTHER COMPANY", "ใบกำกับภาษีออกในชื่อบริษัทอื่น"),
+    ("ANOMALY", "ชนิดน้ำมันไม่ตรงกับรถ"),
+    ("WRONG PLATE", "ทะเบียนรถบนใบกำกับภาษีผิด"),
+    ("plate printed", "ทะเบียนรถบนใบกำกับภาษีพิมพ์ผิด"),
+    ("no plate", "ใบเสร็จไม่มีทะเบียนรถ"),
+    ("verify", "ต้องตรวจว่าไม่ใช่การเบิกซ้ำ"),
+    ("bank slip only", "มีสลิปโอนแต่ไม่มีใบกำกับภาษี"),
+    ("mislabeled", "ลงชื่อรถผิดในบัญชี"),
+]
+
+THAI_MONTHS = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."]
+
+
+def _num(v):
+    return float(v) if v not in (None, "") else None
+
+
+def load_fills(path=FUEL_LOG):
+    if not path.exists():
+        return []
+    fills = []
+    with open(path, encoding="utf-8") as f:
+        for r in csv.DictReader(f):
+            fills.append({
+                "date": r["date"], "vehicle": r["vehicle"], "plate": r["plate"], "fuel_type": r["fuel_type"],
+                "product": r["fuel_product"], "price": _num(r["price_per_l"]), "liters": _num(r["liters"]),
+                "amount": _num(r["amount"]) or 0.0, "odometer": _num(r["odometer_km"]),
+                "note": r["odometer_note"], "station": r["station"],
+            })
+    fills.sort(key=lambda x: (x["date"], x["vehicle"]))
+    _estimate_missing_liters(fills)
+    return fills
+
+
+def _estimate_missing_liters(fills):
+    """Rows with only a bank slip have no liters; price them at the nearest receipt of the same fuel."""
+    priced = defaultdict(list)
+    for f in fills:
+        if f["price"]:
+            priced[f["fuel_type"]].append((date.fromisoformat(f["date"]), f["price"]))
+    for f in fills:
+        f["estimated"] = f["liters"] is None
+        if f["estimated"] and priced[f["fuel_type"]]:
+            d = date.fromisoformat(f["date"])
+            f["price"] = min(priced[f["fuel_type"]], key=lambda p: abs((p[0] - d).days))[1]
+            f["liters"] = f["amount"] / f["price"]
+
+
+def _month_label(key):
+    y, m = key.split("-")
+    return f"{THAI_MONTHS[int(m) - 1]} {y[2:]}"
+
+
+def _months_between(d0, d1):
+    return max((date.fromisoformat(d1) - date.fromisoformat(d0)).days / 30.44, 1e-9)
+
+
+def _dense_window_km_per_l(rows):
+    """km/L over the longest run of consecutive fills that all carry an odometer reading —
+    the most trustworthy figure when the overall log has gaps."""
+    best, run = None, []
+    for f in rows + [None]:
+        if f is not None and f["odometer"]:
+            run.append(f)
+            continue
+        if len(run) >= 5:
+            km = run[-1]["odometer"] - run[0]["odometer"]
+            liters = sum(x["liters"] for x in run[1:])
+            if km > 0 and liters and (best is None or len(run) > best[0]):
+                best = (len(run), km / liters, run[0]["date"], run[-1]["date"])
+        run = []
+    return best
+
+
+def vehicle_summary(fills):
+    by_vehicle = defaultdict(list)
+    for f in fills:
+        by_vehicle[f["vehicle"]].append(f)
+    latest_price = {}
+    for f in fills:
+        if f["price"] and not f["estimated"]:
+            latest_price[f["fuel_type"]] = f["price"]
+
+    out = []
+    for name, rows in by_vehicle.items():
+        fuel = rows[0]["fuel_type"]
+        odo = [f for f in rows if f["odometer"]]
+        v = {
+            "name": name, "plate": rows[0]["plate"], "fuel_type": fuel, "fuel_label": FUEL_LABEL.get(fuel, fuel),
+            "fills": len(rows), "amount": sum(f["amount"] for f in rows), "liters": sum(f["liters"] or 0 for f in rows),
+            "first_date": rows[0]["date"], "last_date": rows[-1]["date"],
+            "km": None, "km_per_l": None, "km_per_month": None, "baht_per_km": None,
+            "efficiency_note": "", "missing_liters": None, "odometer_last": odo[-1]["odometer"] if odo else None,
+        }
+        if len(odo) >= 2:
+            a, b = odo[0], odo[-1]
+            km = b["odometer"] - a["odometer"]
+            # Fuel burned between two readings is what was put in after the first, up to the second.
+            ia, ib = rows.index(a), rows.index(b)
+            liters = sum(f["liters"] or 0 for f in rows[ia + 1:ib + 1])
+            v["km"] = km
+            v["km_per_month"] = km / _months_between(a["date"], b["date"])
+            if liters:
+                kpl = km / liters
+                ceiling = PLAUSIBLE_MAX_KM_PER_L.get(fuel, 99)
+                dense = _dense_window_km_per_l(rows)
+                if kpl > ceiling and dense:
+                    v["missing_liters"] = km / dense[1] - liters
+                    v["efficiency_note"] = (
+                        f"ใบเสร็จไม่ครบ: ถ้าคิดจากใบเสร็จได้ {kpl:.1f} กม./ลิตร ซึ่งสูงเกินจริง — "
+                        f"ใช้ค่าช่วงที่มีเลขไมล์ครบ ({dense[2]} ถึง {dense[3]}) แทน"
+                    )
+                    kpl = dense[1]
+                elif kpl > ceiling:
+                    v["efficiency_note"] = f"{kpl:.1f} กม./ลิตร สูงเกินจริง — น่าจะมีการเติมที่ไม่ได้บันทึก"
+                v["km_per_l"] = kpl
+                if latest_price.get(fuel):
+                    v["baht_per_km"] = latest_price[fuel] / kpl
+        v["issues"] = sum(1 for f in rows if issue_of(f))
+        out.append(v)
+    out.sort(key=lambda v: -v["amount"])
+    return out, latest_price
+
+
+def issue_of(f):
+    note = f["note"] or ""
+    for frag, label in ISSUE_RULES:
+        if frag.lower() in note.lower():
+            return label
+    return ""
+
+
+def monthly(fills, vehicles):
+    """Spend per month per vehicle, plus the average pump price per fuel type and how much
+    of each month's spend comes from prices above the pre-PRICE_BASELINE_END average."""
+    base = {}
+    for fuel in {f["fuel_type"] for f in fills}:
+        pre = [f for f in fills if f["fuel_type"] == fuel and f["date"] < PRICE_BASELINE_END and not f["estimated"]]
+        liters = sum(f["liters"] for f in pre)
+        base[fuel] = sum(f["amount"] for f in pre) / liters if liters else None
+
+    months = sorted({f["date"][:7] for f in fills})
+    names = [v["name"] for v in vehicles]
+    rows = []
+    for m in months:
+        mf = [f for f in fills if f["date"][:7] == m]
+        diesel = [f for f in mf if f["fuel_type"] == "diesel" and not f["estimated"]]
+        d_liters = sum(f["liters"] for f in diesel)
+        price_effect = sum(f["liters"] * (f["price"] - base[f["fuel_type"]])
+                           for f in mf if base.get(f["fuel_type"]) and f["price"])
+        rows.append({
+            "key": m, "label": _month_label(m), "fills": len(mf),
+            "amount": sum(f["amount"] for f in mf), "liters": sum(f["liters"] or 0 for f in mf),
+            "by_vehicle": {n: sum(f["amount"] for f in mf if f["vehicle"] == n) for n in names},
+            "diesel_price": sum(f["amount"] for f in diesel) / d_liters if d_liters else None,
+            "price_effect": price_effect,
+        })
+    return rows, base
+
+
+def build_page_data(path=FUEL_LOG):
+    fills = load_fills(path)
+    if not fills:
+        return None
+    vehicles, latest_price = vehicle_summary(fills)
+    months, base = monthly(fills, vehicles)
+    crisis = [m for m in months if m["key"] >= PRICE_BASELINE_END[:7]]
+    issues = [{**f, "issue": issue_of(f)} for f in fills if issue_of(f)]
+    recent = [m for m in months[-3:]]
+    return {
+        "fills": fills, "vehicles": vehicles, "months": months, "issues": issues,
+        "baseline": base, "latest_price": latest_price,
+        "baseline_label": _month_label(PRICE_BASELINE_END[:7]),
+        "kpi": {
+            "amount": sum(f["amount"] for f in fills),
+            "liters": sum(f["liters"] or 0 for f in fills),
+            "fills": len(fills),
+            "first_date": fills[0]["date"], "last_date": fills[-1]["date"],
+            "price_effect_since": sum(m["price_effect"] for m in crisis),
+            "monthly_avg_recent": sum(m["amount"] for m in recent) / len(recent) if recent else 0,
+            "monthly_liters_recent": sum(m["liters"] for m in recent) / len(recent) if recent else 0,
+            "missing_liters": sum(v["missing_liters"] or 0 for v in vehicles),
+        },
+    }

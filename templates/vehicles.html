@@ -1,0 +1,293 @@
+{% extends "base.html" %}
+{% from "_icons.html" import icon %}
+{% block title %}ต้นทุนรถ · บัญชีรายจ่าย{% endblock %}
+{% block head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<style>
+  .section { padding: 20px 22px; margin-bottom: 16px; }
+  .section-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
+  .section h2 { font-size: 16px; margin: 0; font-weight: 700; }
+  .section .hint { font-size: 12px; color: var(--muted); }
+  .kpis { display: grid; grid-template-columns: repeat(4, 1fr); margin-bottom: 16px; overflow: hidden; }
+  .kpi { padding: 16px 18px; border-right: 1px solid var(--border); min-width: 0; }
+  .kpi:last-child { border-right: none; }
+  .kpi .label { font-size: 12px; color: var(--muted); font-weight: 600; }
+  .kpi .value { font-size: 22px; font-weight: 700; margin: 2px 0 4px; letter-spacing: -.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
+  .kpi .value.expense { color: var(--expense); }
+  .kpi .sub { font-size: 12px; color: var(--muted); }
+  .notice { background: var(--warn-soft); border: 1px solid #f6d9ae; color: var(--warn); border-radius: var(--radius); padding: 10px 14px; font-size: 13px; margin-bottom: 16px; }
+  .scroll { overflow-x: auto; }
+  table.grid { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+  table.grid th { text-align: right; font-size: 12px; color: var(--muted); font-weight: 600; padding: 8px 10px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+  table.grid th.l, table.grid td.l { text-align: left; }
+  table.grid td { padding: 9px 10px; text-align: right; border-bottom: 1px solid var(--border); white-space: nowrap; font-size: 13px; }
+  table.grid td.wrap { white-space: normal; min-width: 160px; }
+  table.grid tr.total td { font-weight: 700; border-top: 2px solid var(--border-strong); border-bottom: none; }
+  .vname { display: flex; align-items: center; gap: 8px; font-weight: 700; }
+  .swatch { width: 10px; height: 10px; border-radius: 3px; flex: 0 0 auto; }
+  .muted { color: var(--muted); }
+  .up { color: var(--expense); }
+  .down { color: var(--income); }
+  table.grid td.warn-text { color: var(--warn); font-size: 12px; white-space: normal; text-align: left; padding-top: 0 !important; }
+  .pill { display: inline-block; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 999px; background: var(--warn-soft); color: var(--warn); }
+  .pill.est { background: var(--surface-2); color: var(--muted); }
+  .best { display: inline-block; font-size: 11px; font-weight: 700; color: var(--income); margin-left: 4px; }
+  .chart-wrap { position: relative; height: 300px; }
+  .chips { display: flex; gap: 6px; flex-wrap: wrap; }
+  .chip { border: 1px solid var(--border-strong); background: var(--surface); color: var(--text); padding: 5px 12px; border-radius: 999px; font-size: 12px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+  .chip.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .more-btn { border: none; background: var(--surface-2); color: var(--text); font-weight: 600; font-size: 13px; padding: 8px 14px; border-radius: 8px; cursor: pointer; margin-top: 10px; }
+  .empty { padding: 40px; text-align: center; color: var(--muted); }
+  @media (max-width: 900px) {
+    .kpis { grid-template-columns: repeat(2, 1fr); }
+    .kpi:nth-child(2) { border-right: none; }
+    .kpi:nth-child(-n+2) { border-bottom: 1px solid var(--border); }
+    .section { padding: 16px; }
+    .chart-wrap { height: 240px; }
+  }
+</style>
+{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>ต้นทุนรถ</h1>
+  {% if data %}<span class="sub">จากใบกำกับภาษีและรูปเลขไมล์ · {{ data.kpi.first_date }} ถึง {{ data.kpi.last_date }} · {{ data.kpi.fills }} ครั้ง</span>{% endif %}
+</div>
+
+{% if not data %}
+<div class="card empty">ยังไม่มีข้อมูล — เพิ่มไฟล์ vehicle_fuel_log.csv</div>
+{% else %}
+{% set k = data.kpi %}
+{% set d_now = data.latest_price.get('diesel') %}
+{% set d_base = data.baseline.get('diesel') %}
+<div class="kpis card">
+  <div class="kpi">
+    <div class="label">ค่าน้ำมันรวม</div>
+    <div class="value">{{ k.amount|baht }}</div>
+    <div class="sub">{{ '{:,.0f}'.format(k.liters) }} ลิตร</div>
+  </div>
+  <div class="kpi">
+    <div class="label">เฉลี่ยต่อเดือน (3 เดือนล่าสุด)</div>
+    <div class="value">{{ k.monthly_avg_recent|baht }}</div>
+    <div class="sub">~{{ '{:,.0f}'.format(k.monthly_liters_recent) }} ลิตร/เดือน · ดีเซล ±1 บาท = ±{{ '{:,.0f}'.format(k.monthly_liters_recent) }} บาท/เดือน</div>
+  </div>
+  <div class="kpi">
+    <div class="label">จ่ายเพิ่มเพราะราคาน้ำมัน</div>
+    <div class="value expense">+{{ k.price_effect_since|baht }}</div>
+    <div class="sub">ตั้งแต่ {{ data.baseline_label }} เทียบราคาก่อนหน้านั้น</div>
+  </div>
+  <div class="kpi">
+    <div class="label">ราคาดีเซลล่าสุด</div>
+    <div class="value">{{ '%.2f'|format(d_now) if d_now else '–' }} <span style="font-size:13px;font-weight:600" class="muted">บาท/ลิตร</span></div>
+    <div class="sub">{% if d_now and d_base %}<span class="{{ 'up' if d_now > d_base else 'down' }}">{{ '%+.1f'|format((d_now - d_base) / d_base * 100) }}%</span> เทียบเฉลี่ยก่อน {{ data.baseline_label }} ({{ '%.2f'|format(d_base) }}){% endif %}</div>
+  </div>
+</div>
+
+{% if k.missing_liters > 1 %}
+<div class="notice">
+  {% for v in data.vehicles if v.missing_liters %}
+  <b>{{ v.name }}</b>: ใบเสร็จขาดประมาณ <b>{{ '{:,.0f}'.format(v.missing_liters) }} ลิตร</b>
+  (~{{ '{:,.0f}'.format(v.missing_liters * (d_now or 0)) }} บาท ที่ราคาปัจจุบัน) เมื่อเทียบระยะทางที่วิ่งจริงกับอัตราสิ้นเปลืองปกติของคันนี้
+  {% endfor %}
+</div>
+{% endif %}
+
+{% set best = data.vehicles|selectattr('baht_per_km')|sort(attribute='baht_per_km')|first %}
+<section class="card section">
+  <div class="section-head">
+    <h2>เทียบรายคัน</h2>
+    <span class="hint">บาท/กม. คิดจากราคาน้ำมันล่าสุด</span>
+  </div>
+  <div class="scroll">
+    <table class="grid">
+      <thead><tr>
+        <th class="l">รถ</th><th class="l">น้ำมัน</th><th>กม./ลิตร</th><th>วิ่งเฉลี่ย/เดือน</th><th>บาท/กม.</th>
+        <th>ค่าน้ำมันรวม</th><th>เติม</th><th>เลขไมล์ล่าสุด</th><th>ต้องตรวจ</th>
+      </tr></thead>
+      <tbody>
+      {% for v in data.vehicles %}
+      <tr>
+        <td class="l"><span class="vname"><span class="swatch" data-swatch="{{ loop.index0 }}"></span>{{ v.name }} <span class="muted" style="font-weight:500">{{ v.plate }}</span></span></td>
+        <td class="l">{{ v.fuel_label }}</td>
+        <td>{{ '%.1f'|format(v.km_per_l) if v.km_per_l else '–' }}</td>
+        <td>{{ '{:,.0f} กม.'.format(v.km_per_month) if v.km_per_month else '–' }}</td>
+        <td>{% if v.baht_per_km %}{{ '%.2f'|format(v.baht_per_km) }}{% if best and v.name == best.name %}<span class="best">ถูกสุด</span>{% endif %}{% else %}–{% endif %}</td>
+        <td>{{ v.amount|baht }}</td>
+        <td>{{ v.fills }}</td>
+        <td>{{ '{:,.0f}'.format(v.odometer_last) if v.odometer_last else '–' }}</td>
+        <td>{% if v.issues %}<span class="pill">{{ v.issues }}</span>{% else %}<span class="muted">–</span>{% endif %}</td>
+      </tr>
+      {% if v.efficiency_note %}<tr><td></td><td colspan="8" class="warn-text">{{ v.efficiency_note }}</td></tr>{% endif %}
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="card section">
+  <div class="section-head">
+    <h2>ค่าน้ำมันรายเดือน</h2>
+    <span class="hint">แท่ง = ค่าน้ำมันแยกคัน · เส้น = ราคาดีเซลเฉลี่ยที่จ่ายจริง</span>
+  </div>
+  <div class="chart-wrap"><canvas id="month-chart"></canvas></div>
+</section>
+
+<section class="card section">
+  <div class="section-head">
+    <h2>ราคาน้ำมันกระทบค่าใช้จ่ายเท่าไหร่</h2>
+    <span class="hint">เทียบกับถ้าจ่ายราคาเฉลี่ยก่อน {{ data.baseline_label }} (ดีเซล {{ '%.2f'|format(d_base) if d_base else '–' }} บาท/ลิตร)</span>
+  </div>
+  <div class="scroll">
+    <table class="grid">
+      <thead><tr><th class="l">เดือน</th><th>เติม</th><th>ลิตร</th><th>ค่าน้ำมัน</th><th>ราคาดีเซลเฉลี่ย</th><th>ผลจากราคา</th></tr></thead>
+      <tbody>
+      {% for m in data.months|reverse %}
+      <tr>
+        <td class="l">{{ m.label }}</td>
+        <td>{{ m.fills }}</td>
+        <td>{{ '{:,.0f}'.format(m.liters) }}</td>
+        <td>{{ m.amount|baht }}</td>
+        <td>{{ '%.2f'|format(m.diesel_price) if m.diesel_price else '–' }}</td>
+        <td class="{{ 'up' if m.price_effect > 0.5 else 'down' if m.price_effect < -0.5 }}">{{ '{:+,.0f}'.format(m.price_effect) }}</td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+{% if data.issues %}
+<section class="card section">
+  <div class="section-head">
+    <h2>รายการที่ต้องตรวจ</h2>
+    <span class="hint">{{ data.issues|length }} รายการ</span>
+  </div>
+  <div class="scroll">
+    <table class="grid">
+      <thead><tr><th class="l">วันที่</th><th class="l">รถ</th><th class="l">ปัญหา</th><th>ยอด</th><th class="l">ปั๊ม</th></tr></thead>
+      <tbody>
+      {% for f in data.issues|reverse %}
+      <tr>
+        <td class="l">{{ f.date }}</td>
+        <td class="l">{{ f.vehicle }}</td>
+        <td class="l wrap"><span class="pill">{{ f.issue }}</span></td>
+        <td>{{ f.amount|baht }}</td>
+        <td class="l wrap muted">{{ f.station }}</td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endif %}
+
+<section class="card section">
+  <div class="section-head">
+    <h2>ประวัติการเติม</h2>
+    <div class="chips" id="fill-chips"></div>
+  </div>
+  <div class="scroll">
+    <table class="grid">
+      <thead><tr><th class="l">วันที่</th><th class="l">รถ</th><th class="l">น้ำมัน</th><th>บาท/ลิตร</th><th>ลิตร</th><th>ยอด</th><th>เลขไมล์</th><th class="l">ปั๊ม</th></tr></thead>
+      <tbody id="fill-rows"></tbody>
+    </table>
+  </div>
+  <button type="button" class="more-btn" id="fill-more" hidden>แสดงทั้งหมด</button>
+</section>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+{% if page_json %}
+<script>
+const V = {{ page_json|safe }};
+const COLORS = ['#2a78d6', '#1baf7a', '#eda100', '#4a3aa7', '#e34948', '#e87ba4', '#eb6834', '#008300'];
+const colorOf = (name) => COLORS[V.vehicles.indexOf(name) % COLORS.length];
+document.querySelectorAll('[data-swatch]').forEach(el => { el.style.background = COLORS[+el.dataset.swatch % COLORS.length]; });
+
+const css = getComputedStyle(document.documentElement);
+const muted = css.getPropertyValue('--muted').trim() || '#6b7280';
+const grid = css.getPropertyValue('--border').trim() || '#e5e7eb';
+const baht = (v) => v.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+new Chart(document.getElementById('month-chart'), {
+  data: {
+    labels: V.months.map(m => m.label),
+    datasets: [
+      ...V.vehicles.map(name => ({
+        type: 'bar', label: name, data: V.months.map(m => m.by_vehicle[name] || 0),
+        backgroundColor: colorOf(name), stack: 'spend', yAxisID: 'y', borderRadius: 2,
+      })),
+      {
+        type: 'line', label: 'ราคาดีเซล (บาท/ลิตร)', data: V.months.map(m => m.diesel_price),
+        borderColor: '#111827', backgroundColor: '#111827', borderWidth: 2, pointRadius: 2.5,
+        yAxisID: 'y1', spanGaps: true, tension: 0,
+      },
+    ],
+  },
+  options: {
+    maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
+    plugins: {
+      legend: { position: 'bottom', labels: { boxWidth: 10, boxHeight: 10, color: muted } },
+      tooltip: { callbacks: { label: (c) => c.dataset.yAxisID === 'y1'
+        ? ` ราคาดีเซล ${c.parsed.y?.toFixed(2)} บาท/ลิตร`
+        : ` ${c.dataset.label}: ${baht(c.parsed.y)} บาท` } },
+    },
+    scales: {
+      x: { stacked: true, grid: { display: false }, ticks: { color: muted } },
+      y: { stacked: true, grid: { color: grid }, ticks: { color: muted, callback: (v) => v.toLocaleString('th-TH') } },
+      y1: { position: 'right', grid: { display: false }, ticks: { color: muted }, suggestedMin: 25,
+             title: { display: true, text: 'บาท/ลิตร', color: muted } },
+    },
+  },
+});
+
+// --- fill log ------------------------------------------------------------------
+let fillFilter = 'all', showAll = false;
+const chips = document.getElementById('fill-chips');
+['all', ...V.vehicles].forEach(name => {
+  const b = document.createElement('button');
+  b.type = 'button'; b.className = 'chip'; b.dataset.v = name;
+  b.textContent = name === 'all' ? 'ทั้งหมด' : name;
+  b.onclick = () => { fillFilter = name; showAll = false; renderFills(); };
+  chips.appendChild(b);
+});
+
+function cell(text, cls = '') {
+  const td = document.createElement('td');
+  if (cls) td.className = cls;
+  td.textContent = text;
+  return td;
+}
+
+function renderFills() {
+  chips.querySelectorAll('.chip').forEach(c => c.classList.toggle('on', c.dataset.v === fillFilter));
+  const rows = V.fills.filter(f => fillFilter === 'all' || f.vehicle === fillFilter);
+  const shown = showAll ? rows : rows.slice(0, 25);
+  const body = document.getElementById('fill-rows');
+  body.replaceChildren(...shown.map(f => {
+    const tr = document.createElement('tr');
+    tr.append(
+      cell(f.date, 'l'), cell(f.vehicle, 'l'),
+      cell(f.estimated ? 'ไม่มีใบกำกับภาษี' : (f.product || '–'), 'l' + (f.estimated ? ' muted' : '')),
+      cell(f.price ? f.price.toFixed(2) + (f.estimated ? '*' : '') : '–'),
+      cell(f.liters ? (f.estimated ? '~' : '') + f.liters.toFixed(1) : '–'),
+      cell(baht(f.amount)),
+      cell(f.odometer ? f.odometer.toLocaleString('th-TH') : '–', f.odometer ? '' : 'muted'),
+      cell(f.station || '', 'l wrap muted'),
+    );
+    if (f.issue) {
+      const pill = document.createElement('span');
+      pill.className = 'pill'; pill.style.marginLeft = '6px'; pill.textContent = f.issue;
+      tr.children[1].appendChild(pill);
+    }
+    return tr;
+  }));
+  const more = document.getElementById('fill-more');
+  more.hidden = showAll || rows.length <= 25;
+  more.textContent = `แสดงทั้งหมด (${rows.length})`;
+}
+document.getElementById('fill-more').onclick = () => { showAll = true; renderFills(); };
+renderFills();
+</script>
+{% endif %}
+{% endblock %}

@@ -189,6 +189,7 @@
   <nav class="nav">
     <a href="/" class="{{ 'active' if nav == 'txns' }}">{{ icon('list') }}รายการ<span class="badge-count" data-attention-count hidden></span></a>
     <a href="/reports" class="{{ 'active' if nav == 'reports' }}">{{ icon('chart') }}ภาพรวม</a>
+    <a href="/vehicles" class="{{ 'active' if nav == 'vehicles' }}">{{ icon('truck') }}ต้นทุนรถ</a>
     <a href="/chat" class="{{ 'active' if nav == 'chat' }}">{{ icon('chat') }}แชต LINE</a>
     {% if is_admin %}
     <div class="nav-label">ผู้ดูแล</div>
@@ -241,6 +242,7 @@
 <nav class="tabbar" aria-label="เมนูหลัก">
   <a href="/" class="{{ 'active' if nav == 'txns' }}">{{ icon('list') }}รายการ<span class="dot" data-attention-count hidden></span></a>
   <a href="/reports" class="{{ 'active' if nav == 'reports' }}">{{ icon('chart') }}ภาพรวม</a>
+  <a href="/vehicles" class="{{ 'active' if nav == 'vehicles' }}">{{ icon('truck') }}รถ</a>
   <a href="/chat" class="{{ 'active' if nav == 'chat' }}">{{ icon('chat') }}แชต</a>
   {% if is_admin %}
   <a href="/settings/categories" class="{{ 'active' if nav == 'categories' }}">{{ icon('tag') }}หมวด</a>

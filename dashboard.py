@@ -405,6 +405,31 @@ def fetch_overview(cur, y, m):
     }
 
 
+@app.get("/vehicles")
+def vehicles_view(request: Request):
+    redirect = require_login(request)
+    if redirect:
+        return redirect
+    import vehicle_costs
+
+    data = vehicle_costs.build_page_data()
+    page_json = None
+    if data:
+        page_json = json.dumps(
+            {
+                "vehicles": [v["name"] for v in data["vehicles"]],
+                "months": [{k: m[k] for k in ("label", "by_vehicle", "diesel_price")} for m in data["months"]],
+                "fills": [
+                    {k: f[k] for k in ("date", "vehicle", "product", "price", "liters", "amount", "odometer",
+                                       "station", "estimated")} | {"issue": vehicle_costs.issue_of(f)}
+                    for f in reversed(data["fills"])
+                ],
+            },
+            ensure_ascii=False,
+        ).replace("<", "\\u003c")
+    return render_page(request, "vehicles.html", "vehicles", {"data": data, "page_json": page_json})
+
+
 @app.get("/reports")
 def reports(request: Request, month: str = "", focus: str = "all"):
     redirect = require_login(request)
