@@ -170,6 +170,14 @@
 {% set uc = u.total_complete %}
 <section class="card section">
   <div class="section-head">
+    <h2>ปริมาณน้ำมันที่ใช้ต่อเดือน เทียบราคา</h2>
+    <span class="hint">เส้นทึบ = ลิตร ({{ u.complete_names|join(', ') }}) · เส้นประ = ลิตรทุกคัน · เส้นแดง = ราคาดีเซล (แกนขวา)</span>
+  </div>
+  <div class="chart-wrap"><canvas id="volume-chart"></canvas></div>
+</section>
+
+<section class="card section">
+  <div class="section-head">
     <h2>ราคาขึ้นแล้ว เราใช้น้ำมันเปลี่ยนไหม</h2>
     <span class="hint">เฉลี่ยต่อเดือน: ก่อน ({{ u.before_label }}) เทียบ หลังราคาขึ้น ({{ u.after_label }})</span>
   </div>
@@ -360,6 +368,49 @@ function renderMonthChart() {
 }
 document.querySelectorAll('#unit-chips .chip').forEach(c => { c.onclick = () => { chartUnit = c.dataset.u; renderMonthChart(); }; });
 renderMonthChart();
+
+// Liters per month against the diesel price: the two lines show whether usage moved when price did.
+// A month before a vehicle's first logged fill is "no data", not zero liters, so each line only
+// starts once every vehicle it sums has records.
+const MONTH_KEYS = [...new Set(V.fills.map(f => f.date.slice(0, 7)))].sort();
+const firstMonth = {};
+V.fills.forEach(f => { const k = f.date.slice(0, 7); if (!firstMonth[f.vehicle] || k < firstMonth[f.vehicle]) firstMonth[f.vehicle] = k; });
+const sumLiters = (m, names, i) => {
+  const start = names.map(n => firstMonth[n]).sort().pop();
+  if (MONTH_KEYS[i] < start) return null;
+  return names.reduce((a, n) => a + (m.liters_by_vehicle[n] || 0), 0);
+};
+new Chart(document.getElementById('volume-chart'), {
+  type: 'line',
+  data: {
+    labels: V.months.map(m => m.label),
+    datasets: [
+      { label: `ลิตร/เดือน (${V.complete.join(', ')})`, data: V.months.map((m, i) => sumLiters(m, V.complete, i)),
+        borderColor: '#2a78d6', backgroundColor: 'rgba(42,120,214,.12)', fill: true, borderWidth: 2.5,
+        pointRadius: 3, tension: 0, yAxisID: 'y' },
+      { label: 'ลิตร/เดือน ทุกคัน', data: V.months.map((m, i) => sumLiters(m, V.vehicles, i)),
+        borderColor: '#9ca3af', borderDash: [5, 4], borderWidth: 1.5, pointRadius: 0, tension: 0, yAxisID: 'y' },
+      { label: 'ราคาดีเซล (บาท/ลิตร)', data: V.months.map(m => m.diesel_price),
+        borderColor: '#c8372d', backgroundColor: '#c8372d', borderWidth: 2.5, pointRadius: 3, tension: 0,
+        spanGaps: true, yAxisID: 'y1' },
+    ],
+  },
+  options: {
+    maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
+    plugins: {
+      legend: { position: 'bottom', labels: { boxWidth: 14, boxHeight: 2, color: muted } },
+      tooltip: { callbacks: { label: (c) => c.dataset.yAxisID === 'y1'
+        ? ` ราคาดีเซล ${c.parsed.y?.toFixed(2)} บาท/ลิตร`
+        : ` ${c.dataset.label}: ${c.parsed.y.toLocaleString('th-TH', { maximumFractionDigits: 0 })} ลิตร` } },
+    },
+    scales: {
+      x: { type: 'category', grid: { display: false }, ticks: { color: muted } },
+      y: { beginAtZero: true, grid: { color: grid }, ticks: { color: muted }, title: { display: true, text: 'ลิตร', color: muted } },
+      y1: { position: 'right', grid: { display: false }, suggestedMin: 25, ticks: { color: '#c8372d' },
+            title: { display: true, text: 'บาท/ลิตร', color: '#c8372d' } },
+    },
+  },
+});
 
 // --- fill log ------------------------------------------------------------------
 let fillFilter = 'all', showAll = false;
