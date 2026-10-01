@@ -12,7 +12,7 @@
     border: none; border-left: 1px solid var(--border); border-right: 1px solid var(--border);
     padding: 0 12px; height: 34px; font-weight: 700; background: var(--surface); cursor: pointer; outline: none;
   }
-  .export-pop { width: 320px; max-width: calc(100vw - 32px); padding: 14px; }
+  .export-pop { width: 320px; max-width: calc(100vw - 32px); max-height: calc(100vh - 96px); overflow-y: auto; padding: 14px; }
   .export-pop .xp-title { font-weight: 700; font-size: 14px; margin-bottom: 10px; }
   .export-pop .xp-seg { display: flex; background: var(--bg); border-radius: 8px; padding: 3px; gap: 2px; margin-bottom: 12px; }
   .export-pop .xp-seg button { flex: 1; width: auto; justify-content: center; padding: 6px 4px; font-size: 12px; font-weight: 600; color: var(--muted); border-radius: 6px; }
@@ -22,6 +22,18 @@
   .export-pop .xp-two { display: flex; gap: 8px; }
   .export-pop label { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 0; font-size: 12px; color: var(--muted); font-weight: 600; }
   .export-pop input, .export-pop select { width: 100%; padding: 8px 10px; border: 1px solid var(--border-strong); border-radius: 8px; font-size: 13px; background: var(--surface); color: var(--text); font-family: inherit; }
+  .export-pop .xp-cats { margin-bottom: 10px; }
+  .export-pop .xp-label { font-size: 12px; color: var(--muted); font-weight: 600; margin-bottom: 4px; }
+  .export-pop .xp-cat-btn { justify-content: space-between; border: 1px solid var(--border-strong); padding: 8px 10px; border-radius: 8px; font-size: 13px; }
+  .export-pop .xp-cat-btn span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .export-pop .xp-cat-list { max-height: 210px; overflow-y: auto; border: 1px solid var(--border); border-radius: 8px; margin-top: 6px; padding: 4px; }
+  .export-pop .xp-cat-list[hidden] { display: none; }
+  .export-pop label.xp-ck { flex-direction: row; align-items: center; gap: 8px; padding: 5px 6px; border-radius: 6px; font-size: 13px; font-weight: 500; color: var(--text); cursor: pointer; }
+  .export-pop label.xp-ck:hover { background: var(--surface-2); }
+  .export-pop label.xp-all { font-weight: 700; border-bottom: 1px solid var(--border); border-radius: 6px 6px 0 0; margin-bottom: 2px; }
+  .export-pop label.xp-grp { font-weight: 600; }
+  .export-pop label.xp-sub { padding-left: 28px; color: var(--muted); }
+  .export-pop input[type=checkbox] { width: 15px; height: 15px; padding: 0; flex: 0 0 auto; accent-color: var(--accent); }
   .export-pop .xp-summary { font-size: 12px; color: var(--muted); background: var(--accent-soft); color: var(--accent); border-radius: 8px; padding: 8px 10px; margin-bottom: 10px; font-weight: 600; }
   .export-pop .xp-summary.bad { background: var(--warn-soft); color: var(--warn); }
   .export-pop .xp-dl { gap: 12px; padding: 10px; border: 1px solid var(--border); margin-top: 6px; align-items: center; }
@@ -151,7 +163,7 @@
       {% if idx > 0 %}<a href="/reports?month={{ opt_values[idx - 1] }}" title="เดือนถัดไป" aria-label="เดือนถัดไป">{{ icon('right') }}</a>{% else %}<span class="nav-disabled">{{ icon('right') }}</span>{% endif %}
     </div>
     <div class="menu" id="export-menu">
-      <button type="button" class="btn" onclick="toggleMenu('export-menu', event)">{{ icon('download') }}<span class="hide-mobile">Export</span></button>
+      <button type="button" class="btn" onclick="openExport(event)">{{ icon('download') }}<span class="hide-mobile">Export</span></button>
       <div class="menu-pop export-pop">
         <div class="xp-title">ดาวน์โหลดรายงาน</div>
         <div class="xp-seg" role="tablist" aria-label="ช่วงรายงาน">
@@ -176,6 +188,20 @@
         <div class="xp-pane xp-two" data-pane="custom" hidden>
           <label>ตั้งแต่<input type="date" id="x-from" value="{{ cur_from }}" oninput="updateExportSummary()"></label>
           <label>ถึง<input type="date" id="x-to" value="{{ cur_to }}" oninput="updateExportSummary()"></label>
+        </div>
+        <div class="xp-cats">
+          <div class="xp-label">หมวด</div>
+          <button type="button" class="xp-cat-btn" onclick="toggleCatList()" aria-controls="x-cat-list"><span id="x-cat-label">ทุกหมวด</span><span class="caret">▾</span></button>
+          <div class="xp-cat-list" id="x-cat-list" hidden>
+            <label class="xp-ck xp-all"><input type="checkbox" id="x-cat-all" checked onchange="setAllCats(this.checked)">ทุกหมวด</label>
+            {% for g in export_groups %}
+            {% set single = g.cats|length == 1 and g.cats[0] == g.name %}
+            <label class="xp-ck xp-grp"><input type="checkbox" checked data-group="{{ g.name }}" {% if single %}data-cat="{{ g.name }}"{% endif %} onchange="onGroupCheck(this)">{{ g.name }}</label>
+            {% if not single %}{% for c in g.cats %}
+            <label class="xp-ck xp-sub"><input type="checkbox" checked data-cat="{{ c }}" data-parent="{{ g.name }}" onchange="onCatCheck()">{{ c }}</label>
+            {% endfor %}{% endif %}
+            {% endfor %}
+          </div>
         </div>
         <div class="xp-summary" id="x-summary"></div>
         <button type="button" class="xp-dl" data-dl onclick="downloadReport('pdf')">
@@ -285,22 +311,100 @@ function setExportKind(kind) {
 
 function updateExportSummary() {
   const r = exportRange();
-  const bad = !r || r[0] > r[1];
+  const cats = selectedCats();
+  const noCats = cats !== null && !cats.length;
+  const bad = !r || r[0] > r[1] || noCats;
   const el = document.getElementById('x-summary');
   el.classList.toggle('bad', bad);
   el.textContent = !r ? 'เลือกวันที่ให้ครบก่อน'
-    : bad ? 'วันเริ่มต้องไม่หลังวันสิ้นสุด'
-    : 'ช่วงรายงาน: ' + (r[0] === r[1] ? thDate(r[0]) : `${thDate(r[0])} – ${thDate(r[1])}`);
+    : r[0] > r[1] ? 'วันเริ่มต้องไม่หลังวันสิ้นสุด'
+    : noCats ? 'เลือกอย่างน้อย 1 หมวด'
+    : 'ช่วงรายงาน: ' + (r[0] === r[1] ? thDate(r[0]) : `${thDate(r[0])} – ${thDate(r[1])}`)
+      + (cats ? ` · ${catLabel()}` : '');
   document.querySelectorAll('[data-dl]').forEach(b => { b.disabled = bad; });
+}
+
+// --- category scope ----------------------------------------------------------
+let catTouched = false;
+const catList = () => document.getElementById('x-cat-list');
+const catBoxes = () => [...catList().querySelectorAll('input[data-cat]')];
+const kidsOf = (group) => [...catList().querySelectorAll(`input[data-parent="${CSS.escape(group)}"]`)];
+
+// null = every category (no filter), otherwise the checked category names.
+function selectedCats() {
+  const boxes = catBoxes();
+  const on = boxes.filter(b => b.checked).map(b => b.dataset.cat);
+  return on.length === boxes.length ? null : on;
+}
+
+// Checked scope for display: a fully-checked group shows as its group name.
+function catLabel() {
+  if (selectedCats() === null) return 'ทุกหมวด';
+  const names = [];
+  catList().querySelectorAll('input[data-group]').forEach(g => {
+    if (g.checked) names.push(g.dataset.group);
+    else if (!g.dataset.cat) kidsOf(g.dataset.group).forEach(k => { if (k.checked) names.push(k.dataset.cat); });
+  });
+  if (!names.length) return 'ยังไม่ได้เลือกหมวด';
+  return names.length <= 2 ? names.join(', ') : `${names.slice(0, 2).join(', ')} +${names.length - 2}`;
+}
+
+function syncCats() {
+  catList().querySelectorAll('input[data-group]:not([data-cat])').forEach(g => {
+    const kids = kidsOf(g.dataset.group), n = kids.filter(k => k.checked).length;
+    g.checked = n === kids.length;
+    g.indeterminate = n > 0 && n < kids.length;
+  });
+  const boxes = catBoxes(), n = boxes.filter(b => b.checked).length;
+  const all = document.getElementById('x-cat-all');
+  all.checked = n === boxes.length;
+  all.indeterminate = n > 0 && n < boxes.length;
+  document.getElementById('x-cat-label').textContent = catLabel();
+  updateExportSummary();
+}
+
+function onGroupCheck(el) {
+  catTouched = true;
+  if (!el.dataset.cat) kidsOf(el.dataset.group).forEach(k => { k.checked = el.checked; });
+  syncCats();
+}
+
+function onCatCheck() {
+  catTouched = true;
+  syncCats();
+}
+
+function setAllCats(on) {
+  catTouched = true;
+  catList().querySelectorAll('input[data-group], input[data-cat]').forEach(b => { b.checked = on; });
+  syncCats();
+}
+
+function toggleCatList() {
+  catList().hidden = !catList().hidden;
+}
+
+// Until the user picks categories themselves, the export follows the group being viewed.
+function openExport(e) {
+  if (!catTouched) {
+    const g = currentFocus.startsWith('g:') ? currentFocus.slice(2) : null;
+    catList().querySelectorAll('input[data-group]').forEach(b => { b.checked = !g || b.dataset.group === g; });
+    catList().querySelectorAll('input[data-parent]').forEach(b => { b.checked = !g || b.dataset.parent === g; });
+    syncCats();
+  }
+  toggleMenu('export-menu', e);
 }
 
 function downloadReport(fmt) {
   const r = exportRange();
-  if (!r || r[0] > r[1]) return;
+  const cats = selectedCats();
+  if (!r || r[0] > r[1] || (cats && !cats.length)) return;
+  const q = new URLSearchParams({ date_from: r[0], date_to: r[1] });
+  (cats || []).forEach(c => q.append('cats', c));
   document.getElementById('export-menu').classList.remove('open');
-  location.href = `/reports/export/${fmt}?` + new URLSearchParams({ date_from: r[0], date_to: r[1] });
+  location.href = `/reports/export/${fmt}?` + q;
 }
-updateExportSummary();
+syncCats();
 
 
 const R = {{ report_json|safe }};

@@ -19,7 +19,7 @@ import pandas as pd
 import psycopg2
 import psycopg2.extras
 from dotenv import load_dotenv
-from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse, RedirectResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
 from linebot.v3.messaging import ApiClient, Configuration, MessagingApi
@@ -427,6 +427,7 @@ def reports(request: Request, month: str = "", focus: str = "all"):
             )
             month_opts = set(cur.fetchall()) | {(today.year, today.month), (y, m)}
             data = fetch_overview(cur, y, m)
+            categories = get_categories(cur)
     finally:
         conn.close()
 
@@ -441,6 +442,7 @@ def reports(request: Request, month: str = "", focus: str = "all"):
                 for oy, om in sorted(month_opts, reverse=True)
             ],
             "export_years": sorted({oy for oy, _ in month_opts}, reverse=True),
+            "export_groups": _export_groups(categories),
             # Today when viewing the current month, otherwise that month's last day.
             "export_day": min(today, data["cur_to"]).isoformat(),
             "focus": focus,
@@ -455,6 +457,15 @@ def reports(request: Request, month: str = "", focus: str = "all"):
     )
 
 
+def _export_groups(categories):
+    """Category picker for the export popover: [{name, cats}] in settings order, uncategorized last."""
+    groups = {}
+    for c in categories:
+        groups.setdefault(c["group_name"] or c["name"], []).append(c["name"])
+    groups.setdefault(UNCATEGORIZED, []).append(UNCATEGORIZED)
+    return [{"name": g, "cats": cats} for g, cats in groups.items()]
+
+
 def _parse_report_range(date_from, date_to):
     try:
         d_from, d_to = date.fromisoformat(date_from), date.fromisoformat(date_to)
@@ -466,7 +477,9 @@ def _parse_report_range(date_from, date_to):
 
 
 @app.get("/reports/export/{kind}")
-def reports_export(request: Request, kind: str, date_from: str = "", date_to: str = ""):
+def reports_export(
+    request: Request, kind: str, date_from: str = "", date_to: str = "", cats: list[str] = Query(default=[]),
+):
     redirect = require_login(request)
     if redirect:
         return redirect
@@ -482,7 +495,7 @@ def reports_export(request: Request, kind: str, date_from: str = "", date_to: st
     conn = db()
     try:
         with conn.cursor() as cur:
-            rep = export_report.fetch_period_report(cur, d_from, d_to)
+            rep = export_report.fetch_period_report(cur, d_from, d_to, categories=cats or None)
     finally:
         conn.close()
 

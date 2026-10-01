@@ -169,10 +169,13 @@ def _month_end(d):
 # Data
 # ---------------------------------------------------------------------------
 
-def fetch_period_report(cur, d_from, d_to, today=None):
+def fetch_period_report(cur, d_from, d_to, today=None, categories=None):
     """Everything the expense report shows for [d_from, d_to], compared against the
     previous period of the same kind: the day before, the prior calendar month, the
-    prior calendar year — or, for any other range, the equally long window before it."""
+    prior calendar year — or, for any other range, the equally long window before it.
+
+    `categories` (category names, UNCATEGORIZED for slips without one) narrows the
+    whole report — both periods — to those categories; None means every category."""
     today = today or datetime.now(BANGKOK_TZ).date()
     span = (d_to - d_from).days + 1
     prev_to = d_from - timedelta(days=1)
@@ -200,12 +203,20 @@ def fetch_period_report(cur, d_from, d_to, today=None):
         prev_label = f"{fmt_date(prev_from)} – {fmt_date(prev_to)}"
         cur_head, prev_head = "ช่วงนี้", "ช่วงก่อน"
 
-    categories = get_categories(cur)
-    cat_order = {c["name"]: i for i, c in enumerate(categories)}
-    cat_group = {c["name"]: c["group_name"] or c["name"] for c in categories}
+    all_categories = get_categories(cur)
+    cat_order = {c["name"]: i for i, c in enumerate(all_categories)}
+    cat_group = {c["name"]: c["group_name"] or c["name"] for c in all_categories}
 
     def group_of(cat):
         return cat_group.get(cat, cat)
+
+    selected = set(categories) if categories else None
+    if selected is not None:
+        if selected >= {c["name"] for c in all_categories} | {UNCATEGORIZED}:
+            selected = None
+
+    def in_scope(cat):
+        return selected is None or cat in selected
 
     cur.execute(
         """SELECT txn_date, txn_time, bank, direction, category, amount, fee,
@@ -216,7 +227,7 @@ def fetch_period_report(cur, d_from, d_to, today=None):
            ORDER BY txn_date, txn_time NULLS LAST, id""",
         (d_from, d_to),
     )
-    txns, review = [], []
+    txns, review, all_total = [], [], 0.0
     for (t_date, t_time, bank, direction, category, amount, fee,
          sender, receiver, memo, ref, verified) in cur.fetchall():
         cat = category or UNCATEGORIZED
@@ -229,8 +240,13 @@ def fetch_period_report(cur, d_from, d_to, today=None):
             "ref": ref or "", "verified": bool(verified),
         }
         if direction == "unknown":
-            t["issue"] = "ไม่แน่ใจว่าเป็นรายจ่าย"
-            review.append(t)
+            # Not an expense yet, so it has no meaningful category: only a full report lists it.
+            if selected is None:
+                t["issue"] = "ไม่แน่ใจว่าเป็นรายจ่าย"
+                review.append(t)
+            continue
+        all_total += t["amount"]
+        if not in_scope(cat):
             continue
         if not category:
             t["issue"] = "ยังไม่ระบุหมวด"
@@ -244,7 +260,7 @@ def fetch_period_report(cur, d_from, d_to, today=None):
            GROUP BY 1""",
         (UNCATEGORIZED, prev_from, prev_to),
     )
-    prev_by_cat = {r[0]: (float(r[1]), r[2]) for r in cur.fetchall()}
+    prev_by_cat = {r[0]: (float(r[1]), r[2]) for r in cur.fetchall() if in_scope(r[0])}
 
     total = sum(t["amount"] for t in txns)
     prev_total = sum(v[0] for v in prev_by_cat.values())
@@ -362,19 +378,68 @@ def fetch_period_report(cur, d_from, d_to, today=None):
         "generated_at": datetime.now(BANGKOK_TZ),
         "kpi": kpi, "groups": group_list, "trend": trend, "trend_unit": trend_unit,
         "top_payees": top_payees, "largest": largest, "txns": txns, "review": review,
+        "scope": _scope_names(selected, categories_order(all_categories, cat_group)) if selected else None,
+        "all_total": all_total,
+        "scope_share": total / all_total * 100 if selected and all_total else None,
     }
 
 
-def pie_slices(rep):
-    """Group totals for the share chart: every group if they fit the palette, otherwise the
-    biggest PIE_SLICES groups with the rest lumped into one grey slice."""
+def categories_order(categories, cat_group):
+    """[(group, [category, ...]), ...] in settings order, uncategorized last."""
+    groups = {}
+    for c in categories:
+        groups.setdefault(cat_group[c["name"]], []).append(c["name"])
+    groups.setdefault(UNCATEGORIZED, []).append(UNCATEGORIZED)
+    return list(groups.items())
+
+
+def _scope_names(selected, grouped):
+    """Selected categories for display, collapsed to the group name where a whole group is picked."""
+    names = []
+    for gname, members in grouped:
+        chosen = [m for m in members if m in selected]
+        if chosen and len(chosen) == len(members):
+            names.append(gname)
+        else:
+            names.extend(chosen)
+    return names
+
+
+def share_units(rep):
+    """What the share chart and 'biggest' highlight break down by: groups normally, but the
+    categories inside it when the report covers a single group. Returns (unit word, rows)."""
     groups = [g for g in rep["groups"] if g["cur"] > 0]
-    shown = len(groups) if len(groups) <= len(PALETTE) else PIE_SLICES
-    slices = [(g["name"], g["cur"], "#" + PALETTE[i]) for i, g in enumerate(groups[:shown])]
-    rest = sum(g["cur"] for g in groups[shown:])
+    if len(groups) == 1 and not groups[0]["single"]:
+        return "หมวด", [c for c in groups[0]["cats"] if c["cur"] > 0]
+    return "กลุ่ม", groups
+
+
+def pie_title(rep):
+    return f"สัดส่วนรายจ่ายตาม{share_units(rep)[0]}"
+
+
+def pie_slices(rep):
+    """Share-chart slices: every unit if they fit the palette, otherwise the biggest
+    PIE_SLICES with the rest lumped into one grey slice."""
+    unit, rows = share_units(rep)
+    shown = len(rows) if len(rows) <= len(PALETTE) else PIE_SLICES
+    slices = [(r["name"], r["cur"], "#" + PALETTE[i]) for i, r in enumerate(rows[:shown])]
+    rest = sum(r["cur"] for r in rows[shown:])
     if rest:
-        slices.append((f"กลุ่มอื่นรวม {len(groups) - shown} กลุ่ม", rest, "#" + OTHER_COLOR))
+        slices.append((f"{unit}อื่นรวม {len(rows) - shown} {unit}", rest, "#" + OTHER_COLOR))
     return slices
+
+
+def scope_text(rep):
+    return ", ".join(rep["scope"]) if rep["scope"] else ""
+
+
+def scope_note(rep):
+    """One-line explanation of a category-filtered report, or '' for a full one."""
+    if not rep["scope"]:
+        return ""
+    share = f" — คิดเป็น {rep['scope_share']:.1f}% ของรายจ่ายทั้งหมดในช่วงนี้ ({fmt_baht(rep['all_total'])} บาท)"         if rep["scope_share"] is not None else ""
+    return f"เฉพาะหมวด: {scope_text(rep)}{share}"
 
 
 def txns_by_category(rep):
@@ -399,6 +464,8 @@ def change_word(rep):
 
 
 def report_filename(rep, ext):
+    if rep["scope"]:
+        return report_filename({**rep, "scope": None}, ext).replace(f".{ext}", f"_filtered.{ext}")
     if rep["kind"] == "day":
         return f"expense_report_{rep['from']:%Y-%m-%d}.{ext}"
     if rep["kind"] == "month":
@@ -451,6 +518,8 @@ def _xl_title(ws, rep, title, last_col):
     _put(ws, 1, 1, f"{title} · {rep['label']}", _f(16, True, "FFFFFF"), _fill(C_HEADER_BAND),
          align=Alignment(vertical="center", indent=1))
     sub = f"ช่วงวันที่ {rep['range_label']}   ·   จัดทำเมื่อ {fmt_date(rep['generated_at'].date())} {rep['generated_at']:%H:%M} น."
+    if rep["scope"]:
+        sub += f"   ·   เฉพาะ: {scope_text(rep)}"
     _put(ws, 2, 1, sub, _f(9, color="D1D5DB"), _fill(C_HEADER_BAND), align=Alignment(vertical="top", indent=1))
 
 
@@ -511,6 +580,9 @@ def _xl_summary_sheet(wb, rep, chart_ws):
         ("จำนวนรายการ", k["count"], "#,##0", f"สลิป · ผู้รับ {k['payee_count']} ราย"),
         ("เฉลี่ยต่อรายการ", k["avg_txn"], MONEY, "บาท"),
     ]
+    if rep["scope_share"] is not None:
+        kpis.insert(1, ("สัดส่วนจากรายจ่ายทั้งหมด", rep["scope_share"] / 100, "0.0%",
+                        f"ของ {fmt_baht(rep['all_total'])} บาท · เฉพาะ: {scope_text(rep)}"))
     if k["avg"]:
         kpis.append((k["avg"]["label"], k["avg"]["value"], MONEY, f"บาท ({k['avg']['basis']})"))
     kpis += [
@@ -625,7 +697,7 @@ def _xl_summary_sheet(wb, rep, chart_ws):
     n_slices = len(pie_slices(rep))
     if n_slices:
         pie = PieChart()
-        pie.title = "สัดส่วนรายจ่ายตามกลุ่ม"
+        pie.title = pie_title(rep)
         pie.add_data(Reference(chart_ws, min_col=2, min_row=1, max_row=n_slices + 1), titles_from_data=True)
         pie.set_categories(Reference(chart_ws, min_col=1, min_row=2, max_row=n_slices + 1))
         for i, (_, _, color) in enumerate(pie_slices(rep)):
@@ -970,9 +1042,14 @@ class _NumberedCanvas(rl_canvas.Canvas):
 
 def _pdf_header(rep):
     gen = rep["generated_at"]
+    scope = ""
+    if rep["scope"]:
+        lines = wrap_text("เฉพาะ: " + scope_text(rep), FONT_BOLD, 10, CONTENT_W * 0.6 - 28, max_lines=2)
+        scope = '<br/><font name="%s" size="10" color="#93C5FD">%s</font>' % (
+            FONT_BOLD, "<br/>".join(escape(x) for x in lines))
     title = Paragraph(
         f'<font size="9" color="#9CA3AF">{REPORT_TITLE.upper()}</font><br/>'
-        f'<font name="{FONT_BOLD}" size="22" color="#FFFFFF">{escape(rep["label"])}</font>',
+        f'<font name="{FONT_BOLD}" size="22" color="#FFFFFF">{escape(rep["label"])}</font>{scope}',
         _ps("hdr_t", fontName=FONT, fontSize=22, leading=28, textColor=colors.white),
     )
     meta = Paragraph(
@@ -1066,10 +1143,13 @@ def _pdf_highlights(rep):
     """Plain-language takeaways, so the reader gets the story before the tables."""
     k = rep["kpi"]
     out = [f"รายจ่ายรวม <b>{fmt_baht(k['total'])}</b> บาท จาก {k['count']} รายการ — {escape(change_word(rep))}"]
-    top = [g for g in rep["groups"] if g["cur"] > 0][:3]
-    if top:
+    unit, rows = share_units(rep)
+    top = rows[:3]
+    if len(top) > 1:
         parts = ", ".join(f"{escape(g['name'])} {g['share']:.0f}%" for g in top)
-        out.append(f"กลุ่มที่ใช้มากที่สุด: {parts}")
+        out.append(f"{unit}ที่ใช้มากที่สุด: {parts}")
+    if rep["scope_share"] is not None:
+        out.insert(1, f"คิดเป็น <b>{rep['scope_share']:.1f}%</b> ของรายจ่ายทั้งหมดในช่วงนี้ ({fmt_baht(rep['all_total'])} บาท)")
     movers = [g for g in rep["groups"] if g["prev"] or g["cur"]]
     up = max(movers, key=lambda g: g["cur"] - g["prev"], default=None)
     down = min(movers, key=lambda g: g["cur"] - g["prev"], default=None)
@@ -1311,6 +1391,8 @@ def build_report_pdf(rep, output):
     """Render a fetch_period_report() dict to an A4 PDF. `output` is a path or a file-like object."""
     k = rep["kpi"]
     story = [_pdf_header(rep), Spacer(1, 12), _pdf_kpis(rep), Spacer(1, 10)]
+    if rep["scope"]:
+        story += [_callout(escape(scope_note(rep)), fg=C_ACCENT, bg=C_ACCENT_SOFT), Spacer(1, 6)]
     if rep["partial"]:
         story += [_callout(f"ช่วงนี้ยังไม่จบ — ข้อมูลถึง {fmt_date(rep['today'])} "
                            f"ยอดที่เทียบกับ {escape(rep['prev_label'])} จึงยังไม่เต็มช่วง"), Spacer(1, 6)]
@@ -1326,7 +1408,7 @@ def build_report_pdf(rep, output):
 
     pie = _pdf_pie(rep)
     if pie:
-        story += [KeepTogether([Paragraph("สัดส่วนรายจ่ายตามกลุ่ม", ST["h2"]), pie])]
+        story += [KeepTogether([Paragraph(pie_title(rep), ST["h2"]), pie])]
     trend = _pdf_trend(rep)
     if trend:
         story += [KeepTogether([Paragraph(rep["trend_title"], ST["h2"]), trend])]
@@ -1350,7 +1432,7 @@ def build_report_pdf(rep, output):
     if not rep["txns"] and not rep["review"]:
         story += [Spacer(1, 20), P("ไม่มีรายการในช่วงนี้", "muted")]
 
-    footer = f"{REPORT_TITLE} · {rep['label']} · จัดทำ {fmt_date(rep['generated_at'].date())}"
+    footer = f"{REPORT_TITLE} · {rep['label']}{' · เฉพาะบางหมวด' if rep['scope'] else ''} · จัดทำ {fmt_date(rep['generated_at'].date())}"
     doc = SimpleDocTemplate(
         output, pagesize=A4, title=f"{REPORT_TITLE} {rep['label']}", author="Ledger",
         topMargin=MARGIN, bottomMargin=MARGIN + 0.3 * cm, leftMargin=MARGIN, rightMargin=MARGIN,
