@@ -154,11 +154,13 @@ def _xl_summary(wb, data, meta):
 def _xl_monthly(wb, data, meta):
     ws = wb.create_sheet("รายเดือน")
     names = [v["name"] for v in data["vehicles"]]
-    headers = ["เดือน", *names, "รวม (บาท)", "ลิตร", "ราคาดีเซลเฉลี่ย", "ผลจากราคา", *[f"ลิตร {n}" for n in names]]
+    complete_l, total_l = volume_series(data)
+    headers = ["เดือน", *names, "รวม (บาท)", "ลิตร", "ราคาดีเซลเฉลี่ย", "ผลจากราคา", *[f"ลิตร {n}" for n in names],
+               f"ลิตร ({', '.join(data['usage']['complete_names'])})", "ลิตร ทุกคัน"]
     last = len(headers)
     _xl_title(ws, meta, f"{TITLE} — รายเดือน", last)
     _xl_header(ws, 4, headers, "l" + "r" * (last - 1))
-    for i, w in enumerate([12] + [12] * len(names) + [14, 10, 14, 13] + [11] * len(names), start=1):
+    for i, w in enumerate([12] + [12] * len(names) + [14, 10, 14, 13] + [11] * len(names) + [16, 11], start=1):
         ws.column_dimensions[get_column_letter(i)].width = w
     r = 4
     for r, m in enumerate(data["months"], start=5):
@@ -173,6 +175,9 @@ def _xl_monthly(wb, data, meta):
         _put(ws, r, c + 3, eff, _f(10, False, C_UP if eff > 0.5 else C_DOWN if eff < -0.5 else C_MUTED), fmt="+#,##0;-#,##0;0")
         for j, n in enumerate(names, start=c + 4):
             _put(ws, r, j, m["liters_by_vehicle"].get(n) or 0, fmt="#,##0.0")
+        # Blank (not 0) before the vehicles' logs start, so the chart line begins there.
+        _put(ws, r, c + 4 + len(names), complete_l[r - 5], fmt="#,##0")
+        _put(ws, r, c + 5 + len(names), total_l[r - 5], fmt="#,##0")
         for col in range(1, last + 1):
             ws.cell(row=r, column=col).border = Border(bottom=_thin)
     tr = r + 1
@@ -243,6 +248,38 @@ def _xl_chart(summary_ws, month_ws, data, first, last_row, anchor_row):
     liters.title.overlay = False
     liters.width, liters.height = 26, 10
     summary_ws.add_chart(liters, f"A{anchor_row + 26}")
+
+    vol = LineChart()
+    vol.title = "ปริมาณน้ำมันที่ใช้ต่อเดือน เทียบราคา"
+    vcol = 2 * n + 6
+    vol.add_data(Reference(month_ws, min_col=vcol, max_col=vcol + 1, min_row=4, max_row=last_row), titles_from_data=True)
+    vol.set_categories(Reference(month_ws, min_col=1, min_row=first, max_row=last_row))
+    vol.series[0].graphicalProperties.line.solidFill = "2A78D6"
+    vol.series[0].graphicalProperties.line.width = 28000
+    vol.series[1].graphicalProperties.line.solidFill = "9CA3AF"
+    vol.series[1].graphicalProperties.line.dashStyle = "dash"
+    for s in vol.series:
+        s.smooth = False
+    vol.y_axis.title = "ลิตร"
+    vol.y_axis.numFmt = "#,##0"
+    vol.y_axis.scaling.min = 0
+    vol.x_axis.delete = vol.y_axis.delete = False
+    vprice = LineChart()
+    vprice.add_data(Reference(month_ws, min_col=n + 4, min_row=4, max_row=last_row), titles_from_data=True)
+    vprice.series[0].graphicalProperties.line.solidFill = C_UP
+    vprice.series[0].graphicalProperties.line.width = 28000
+    vprice.series[0].smooth = False
+    vprice.y_axis.axId = 300
+    vprice.y_axis.scaling.min = 25
+    vprice.y_axis.title = "บาท/ลิตร"
+    vprice.y_axis.crosses = "max"
+    vprice.y_axis.majorGridlines = None
+    vprice.y_axis.delete = False
+    vol += vprice
+    vol.legend.position = "b"
+    vol.title.overlay = False
+    vol.width, vol.height = 26, 10
+    summary_ws.add_chart(vol, f"A{anchor_row + 48}")
 
 
 def _xl_issues(wb, data, meta):
@@ -435,6 +472,78 @@ def _pdf_month_chart(data, key="by_vehicle"):
     return d
 
 
+def volume_series(data):
+    """Monthly liters for the complete-log vehicles and for all vehicles. A month before every summed
+    vehicle has records is None (no data), not zero."""
+    first = {}
+    for f in data["fills"]:
+        first[f["vehicle"]] = min(first.get(f["vehicle"], f["date"][:7]), f["date"][:7])
+
+    def line(names):
+        start = max(first[n] for n in names) if names else None
+        return [sum(m["liters_by_vehicle"].get(n, 0) for n in names) if start and m["key"] >= start else None
+                for m in data["months"]]
+
+    return line(data["usage"]["complete_names"]), line([v["name"] for v in data["vehicles"]])
+
+
+def _pdf_volume_chart(data):
+    """Liters per month (left axis) against the diesel price (right axis)."""
+    months = data["months"]
+    complete, total = volume_series(data)
+    height = 190
+    d = Drawing(CONTENT_W, height)
+    x, y, w, h = 45, 40, CONTENT_W - 90, height - 55
+    vmax, step = _nice_max(max(v for v in total if v is not None))
+    chart = HorizontalLineChart()
+    chart.x, chart.y, chart.width, chart.height = x, y, w, h
+    chart.data = [complete, total]
+    chart.valueAxis.valueMin, chart.valueAxis.valueMax, chart.valueAxis.valueStep = 0, vmax, step
+    chart.valueAxis.labelTextFormat = lambda v: f"{v:,.0f}"
+    for ax in (chart.valueAxis.labels, chart.categoryAxis.labels):
+        ax.fontName, ax.fontSize, ax.fillColor = FONT, 6.5, _hex(C_MUTED)
+    chart.valueAxis.strokeColor = None
+    chart.valueAxis.visibleGrid = 1
+    chart.valueAxis.gridStrokeColor = _hex("E5E7EB")
+    chart.categoryAxis.categoryNames = [m["label"] for m in months]
+    chart.categoryAxis.labels.angle = 45
+    chart.categoryAxis.labels.boxAnchor = "ne"
+    chart.categoryAxis.tickDown = 0
+    chart.lines[0].strokeColor, chart.lines[0].strokeWidth = _hex("2A78D6"), 2
+    chart.lines[1].strokeColor, chart.lines[1].strokeWidth = _hex("9CA3AF"), 1
+    chart.lines[1].strokeDashArray = [3, 2]
+    d.add(chart)
+    d.add(String(x - 6, y + h + 6, "ลิตร", fontName=FONT, fontSize=6.5, fillColor=_hex(C_MUTED), textAnchor="end"))
+
+    prices = [m["diesel_price"] for m in months]
+    known = [p for p in prices if p]
+    if known:
+        pmin, pmax = 25, max(45, max(known) + 2)
+        line = HorizontalLineChart()
+        line.x, line.y, line.width, line.height = x, y, w, h
+        line.data = [prices]
+        line.valueAxis.valueMin, line.valueAxis.valueMax = pmin, pmax
+        line.valueAxis.visible = line.categoryAxis.visible = 0
+        line.lines[0].strokeColor, line.lines[0].strokeWidth = _hex(C_UP), 2
+        d.add(line)
+        for val in range(30, int(pmax) + 1, 5):
+            yy = y + (val - pmin) / (pmax - pmin) * h
+            d.add(String(x + w + 6, yy - 2, f"{val}", fontName=FONT, fontSize=6.5, fillColor=_hex(C_UP)))
+        d.add(String(x + w + 6, y + h + 6, "บาท/ลิตร", fontName=FONT, fontSize=6.5, fillColor=_hex(C_UP)))
+
+    def swatch(color, dash=None):
+        s = Drawing(16, 9)
+        s.add(Rect(0, 3.5, 16, 1.8 if not dash else 1, fillColor=_hex(color), strokeColor=None))
+        return s
+    names = ", ".join(data["usage"]["complete_names"])
+    legend = Table([[swatch("2A78D6"), P(f"ลิตร ({names})", "cell_muted"), swatch("9CA3AF", True),
+                     P("ลิตรทุกคัน", "cell_muted"), swatch(C_UP), P("ราคาดีเซล", "cell_muted")]],
+                   colWidths=[18, 150, 18, 70, 18, 70])
+    legend.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "MIDDLE"), ("LEFTPADDING", (0, 0), (-1, -1), 2),
+                                ("RIGHTPADDING", (0, 0), (-1, -1), 2)]))
+    return [d, legend]
+
+
 def _pdf_legend(data):
     cells = []
     for i, v in enumerate(data["vehicles"]):
@@ -589,6 +698,9 @@ def build_vehicle_pdf(data, output):
     story += [KeepTogether([Paragraph("ค่าน้ำมันรายเดือน (บาท)", ST["h2"]), _pdf_month_chart(data), _pdf_legend(data)])]
     story += [KeepTogether([Paragraph("ปริมาณน้ำมันที่เติมรายเดือน (ลิตร)", ST["h2"]),
                             _pdf_month_chart(data, "liters_by_vehicle"), _pdf_legend(data)])]
+    story += [KeepTogether([Paragraph("ปริมาณน้ำมันที่ใช้ต่อเดือน เทียบราคา", ST["h2"]),
+                            Paragraph("เส้นเริ่มเมื่อทุกคันในกลุ่มมีข้อมูลแล้ว (ก่อนหน้านั้นคือไม่มีบันทึก ไม่ใช่ศูนย์)", ST["muted"]),
+                            *_pdf_volume_chart(data)])]
     story += _pdf_usage(data)
     story += [CondPageBreak(6 * 28), Paragraph("ราคาน้ำมันกระทบค่าใช้จ่ายเท่าไหร่", ST["h2"]),
               Paragraph(f"ผลจากราคา = ลิตรที่เติม × (ราคาที่จ่าย − ราคาเฉลี่ยก่อน {escape(data['baseline_label'])}) "
