@@ -424,7 +424,7 @@ def vehicles_view(request: Request):
         page_json = json.dumps(
             {
                 "vehicles": [v["name"] for v in data["vehicles"]],
-                "months": [{k: m[k] for k in ("label", "by_vehicle", "diesel_price")} for m in data["months"]],
+                "months": [{k: m[k] for k in ("label", "by_vehicle", "liters_by_vehicle", "diesel_price")} for m in data["months"]],
                 "fills": [
                     {k: f[k] for k in ("date", "vehicle", "product", "price", "liters", "amount", "odometer",
                                        "station", "estimated")} | {"issue": vehicle_costs.issue_of(f)}

@@ -116,6 +116,35 @@ def _xl_summary(wb, data, meta):
             _put(ws, row, 1, v["efficiency_note"], _f(9, color=C_WARN, italic=True), align=Alignment(indent=2, wrap_text=True))
             ws.row_dimensions[row].height = 28
             row += 1
+
+    u = data["usage"]
+    row = _xl_section(ws, row + 1, "ราคาขึ้นแล้ว เราใช้น้ำมันเปลี่ยนไหม", last)
+    ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=last)
+    _put(ws, row, 1, usage_headline(u), _f(10, True, C_ACCENT), _fill(C_ACCENT_SOFT),
+         align=Alignment(indent=1, vertical="center", wrap_text=True))
+    ws.row_dimensions[row].height = 32
+    row += 1
+    _put(ws, row, 1, f"ก่อน = {u['before_label']} · หลัง = {u['after_label']} (เฉลี่ยต่อเดือน)",
+         _f(9, color=C_MUTED, italic=True), align=Alignment(indent=1))
+    row += 1
+    row = _xl_header(ws, row, ["รถ", "ลิตร/ด. ก่อน", "หลัง", "เปลี่ยน", "ผล", "บาท/ด. เปลี่ยน", "", "จากปริมาณ", "จากราคา"],
+                     "lrrrlrrrr")
+    signed = "+#,##0;-#,##0;0"
+    for r in u["vehicles"]:
+        ch = r["liters_change"]
+        _put(ws, row, 1, r["name"], _f(10, True), align=Alignment(indent=1))
+        _put(ws, row, 2, r["before"]["liters"], fmt="#,##0")
+        _put(ws, row, 3, r["after"]["liters"], fmt="#,##0")
+        _put(ws, row, 4, ch / 100 if ch is not None else "–",
+             _f(10, False, C_UP if ch and ch >= 5 else C_DOWN if ch and ch <= -5 else C_INK), fmt="+0.0%;-0.0%;0.0%")
+        _put(ws, row, 5, "ใบเสร็จไม่ครบ" if r["missing_liters"] else r["verdict"],
+             _f(10, color=C_MUTED if r["missing_liters"] else C_INK))
+        _put(ws, row, 6, r["spend_change"], fmt=signed)
+        _put(ws, row, 8, r["volume_effect"], _f(10, color=C_UP if r["volume_effect"] > 0.5 else C_DOWN), fmt=signed)
+        _put(ws, row, 9, r["price_effect"], _f(10, color=C_UP if r["price_effect"] > 0.5 else C_DOWN), fmt=signed)
+        for col in range(1, last + 1):
+            ws.cell(row=row, column=col).border = Border(bottom=_thin)
+        row += 1
     ws.freeze_panes = "A3"
     _xl_print_setup(ws, meta)
     ws.oddFooter.left.text = f"{TITLE} · {meta['range_label']}"
@@ -125,11 +154,11 @@ def _xl_summary(wb, data, meta):
 def _xl_monthly(wb, data, meta):
     ws = wb.create_sheet("รายเดือน")
     names = [v["name"] for v in data["vehicles"]]
-    headers = ["เดือน", *names, "รวม (บาท)", "ลิตร", "ราคาดีเซลเฉลี่ย", "ผลจากราคา"]
+    headers = ["เดือน", *names, "รวม (บาท)", "ลิตร", "ราคาดีเซลเฉลี่ย", "ผลจากราคา", *[f"ลิตร {n}" for n in names]]
     last = len(headers)
     _xl_title(ws, meta, f"{TITLE} — รายเดือน", last)
     _xl_header(ws, 4, headers, "l" + "r" * (last - 1))
-    for i, w in enumerate([12] + [12] * len(names) + [14, 10, 14, 13], start=1):
+    for i, w in enumerate([12] + [12] * len(names) + [14, 10, 14, 13] + [11] * len(names), start=1):
         ws.column_dimensions[get_column_letter(i)].width = w
     r = 4
     for r, m in enumerate(data["months"], start=5):
@@ -142,6 +171,8 @@ def _xl_monthly(wb, data, meta):
         _put(ws, r, c + 2, m["diesel_price"], fmt="0.00")
         eff = m["price_effect"]
         _put(ws, r, c + 3, eff, _f(10, False, C_UP if eff > 0.5 else C_DOWN if eff < -0.5 else C_MUTED), fmt="+#,##0;-#,##0;0")
+        for j, n in enumerate(names, start=c + 4):
+            _put(ws, r, j, m["liters_by_vehicle"].get(n) or 0, fmt="#,##0.0")
         for col in range(1, last + 1):
             ws.cell(row=r, column=col).border = Border(bottom=_thin)
     tr = r + 1
@@ -151,7 +182,7 @@ def _xl_monthly(wb, data, meta):
         if headers[col - 1] == "ราคาดีเซลเฉลี่ย":
             _put(ws, tr, col, None, fill=_fill(C_ACCENT_SOFT))
             continue
-        fmt = "#,##0" if headers[col - 1] == "ลิตร" else "+#,##0;-#,##0;0" if headers[col - 1] == "ผลจากราคา" else MONEY
+        fmt = "#,##0" if headers[col - 1].startswith("ลิตร") else "+#,##0;-#,##0;0" if headers[col - 1] == "ผลจากราคา" else MONEY
         _put(ws, tr, col, f"=SUM({letter}5:{letter}{r})", _f(10, True), _fill(C_ACCENT_SOFT), fmt=fmt)
     for col in range(1, last + 1):
         ws.cell(row=tr, column=col).border = Border(top=_medium)
@@ -173,6 +204,7 @@ def _xl_chart(summary_ws, month_ws, data, first, last_row, anchor_row):
         s.graphicalProperties.line.noFill = True
     bar.gapWidth = 40
     bar.y_axis.numFmt = "#,##0"
+    bar.y_axis.scaling.min = 0
     bar.y_axis.title = "บาท"
     bar.x_axis.delete = bar.y_axis.delete = False
     line = LineChart()
@@ -191,6 +223,26 @@ def _xl_chart(summary_ws, month_ws, data, first, last_row, anchor_row):
     bar.title.overlay = False
     bar.width, bar.height = 26, 11
     summary_ws.add_chart(bar, f"A{anchor_row + 2}")
+
+    liters = BarChart()
+    liters.type, liters.grouping, liters.overlap = "col", "stacked", 100
+    liters.title = "ปริมาณน้ำมันที่เติมรายเดือน (ลิตร)"
+    first_l = n + 6
+    liters.add_data(Reference(month_ws, min_col=first_l, max_col=first_l + n - 1, min_row=4, max_row=last_row),
+                    titles_from_data=True)
+    liters.set_categories(Reference(month_ws, min_col=1, min_row=first, max_row=last_row))
+    for i, s in enumerate(liters.series):
+        s.graphicalProperties.solidFill = _color(i)
+        s.graphicalProperties.line.noFill = True
+    liters.gapWidth = 40
+    liters.y_axis.numFmt = "#,##0"
+    liters.y_axis.scaling.min = 0
+    liters.y_axis.title = "ลิตร"
+    liters.x_axis.delete = liters.y_axis.delete = False
+    liters.legend.position = "b"
+    liters.title.overlay = False
+    liters.width, liters.height = 26, 10
+    summary_ws.add_chart(liters, f"A{anchor_row + 26}")
 
 
 def _xl_issues(wb, data, meta):
@@ -334,16 +386,16 @@ def _pdf_vehicle_table(data):
     return t
 
 
-def _pdf_month_chart(data):
+def _pdf_month_chart(data, key="by_vehicle"):
     months, names = data["months"], [v["name"] for v in data["vehicles"]]
     height = 190
     d = Drawing(CONTENT_W, height)
     chart = VerticalBarChart()
     chart.x, chart.y = 45, 40
     chart.width, chart.height = CONTENT_W - 90, height - 55
-    chart.data = [[m["by_vehicle"].get(n, 0) for m in months] for n in names]
+    chart.data = [[m[key].get(n, 0) for m in months] for n in names]
     chart.categoryAxis.style = "stacked"
-    vmax, step = _nice_max(max(m["amount"] for m in months))
+    vmax, step = _nice_max(max(sum(m[key].values()) for m in months))
     chart.valueAxis.valueMin, chart.valueAxis.valueMax, chart.valueAxis.valueStep = 0, vmax, step
     chart.valueAxis.labelTextFormat = lambda v: f"{v:,.0f}"
     for ax in (chart.valueAxis.labels, chart.categoryAxis.labels):
@@ -471,6 +523,38 @@ def _pdf_recon(data):
     return t
 
 
+def usage_headline(u):
+    t = u["total_complete"]
+    return (f"{', '.join(u['complete_names'])}: {t['verdict']} ({t['liters_change']:+.1f}%) — "
+            f"{t['before']['liters']:,.0f} → {t['after']['liters']:,.0f} ลิตร/เดือน · ค่าน้ำมัน/เดือน "
+            f"{t['spend_change']:+,.0f} บาท = จากราคา {t['price_effect']:+,.0f} + จากปริมาณ {t['volume_effect']:+,.0f}")
+
+
+def _pdf_usage(data):
+    u = data["usage"]
+    widths = [CONTENT_W - 395, 55, 50, 50, 90, 60, 45, 45]
+    rows = [[P("รถ", "head"), P("ลิตร/ด. ก่อน", "head_r"), P("หลัง", "head_r"), P("เปลี่ยน", "head_r"), P("ผล", "head"),
+             P("บาท/ด. เปลี่ยน", "head_r"), P("ปริมาณ", "head_r"), P("ราคา", "head_r")]]
+    for r in u["vehicles"]:
+        ch = r["liters_change"]
+        col = C_UP if ch and ch >= 5 else C_DOWN if ch and ch <= -5 else None
+        rows.append([
+            P(r["name"], bold=True), P(f"{r['before']['liters']:,.0f}", "cell_r"), P(f"{r['after']['liters']:,.0f}", "cell_r"),
+            P(f"{ch:+.1f}%" if ch is not None else "–", "cell_r", color=col),
+            PW("ใบเสร็จไม่ครบ ตีความไม่ได้" if r["missing_liters"] else r["verdict"], widths[4],
+               "cell_muted" if r["missing_liters"] else "cell"),
+            P(f"{r['spend_change']:+,.0f}", "cell_r"),
+            P(f"{r['volume_effect']:+,.0f}", "cell_r", color=C_UP if r["volume_effect"] > 0.5 else C_DOWN),
+            P(f"{r['price_effect']:+,.0f}", "cell_r", color=C_UP if r["price_effect"] > 0.5 else C_DOWN),
+        ])
+    t = Table(rows, colWidths=widths, repeatRows=1)
+    t.setStyle(TableStyle(_base_table_style()))
+    return [CondPageBreak(7 * 28), Paragraph("ราคาขึ้นแล้ว เราใช้น้ำมันเปลี่ยนไหม", ST["h2"]),
+            Paragraph(f"เฉลี่ยต่อเดือน ก่อน ({escape(u['before_label'])}) เทียบ หลังราคาขึ้น ({escape(u['after_label'])}) "
+                      "· จากปริมาณ = ลิตรที่เปลี่ยน × ราคาเดิม, จากราคา = ลิตรใหม่ × ราคาที่เปลี่ยน", ST["muted"]),
+            Spacer(1, 4), _callout(f"<b>{escape(usage_headline(u))}</b>", fg=C_ACCENT, bg=C_ACCENT_SOFT), Spacer(1, 6), t]
+
+
 def build_vehicle_pdf(data, output):
     meta = _meta(data)
     k = data["kpi"]
@@ -502,7 +586,10 @@ def build_vehicle_pdf(data, output):
     story += [Paragraph("เทียบรายคัน", ST["h2"]),
               Paragraph("บาท/กม. คิดจากราคาน้ำมันล่าสุด · กม./ลิตร คิดจากเลขไมล์และลิตรที่เติมระหว่างนั้น", ST["muted"]),
               Spacer(1, 4), _pdf_vehicle_table(data)]
-    story += [KeepTogether([Paragraph("ค่าน้ำมันรายเดือน", ST["h2"]), _pdf_month_chart(data), _pdf_legend(data)])]
+    story += [KeepTogether([Paragraph("ค่าน้ำมันรายเดือน (บาท)", ST["h2"]), _pdf_month_chart(data), _pdf_legend(data)])]
+    story += [KeepTogether([Paragraph("ปริมาณน้ำมันที่เติมรายเดือน (ลิตร)", ST["h2"]),
+                            _pdf_month_chart(data, "liters_by_vehicle"), _pdf_legend(data)])]
+    story += _pdf_usage(data)
     story += [CondPageBreak(6 * 28), Paragraph("ราคาน้ำมันกระทบค่าใช้จ่ายเท่าไหร่", ST["h2"]),
               Paragraph(f"ผลจากราคา = ลิตรที่เติม × (ราคาที่จ่าย − ราคาเฉลี่ยก่อน {escape(data['baseline_label'])}) "
                         "· แดง = จ่ายแพงขึ้น, เขียว = ถูกลง", ST["muted"]),

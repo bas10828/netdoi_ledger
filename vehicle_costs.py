@@ -176,10 +176,71 @@ def monthly(fills, vehicles):
             "key": m, "label": _month_label(m), "fills": len(mf),
             "amount": sum(f["amount"] for f in mf), "liters": sum(f["liters"] or 0 for f in mf),
             "by_vehicle": {n: sum(f["amount"] for f in mf if f["vehicle"] == n) for n in names},
+            "liters_by_vehicle": {n: sum(f["liters"] or 0 for f in mf if f["vehicle"] == n) for n in names},
             "diesel_price": sum(f["amount"] for f in diesel) / d_liters if d_liters else None,
             "price_effect": price_effect,
         })
     return rows, base
+
+
+BEFORE_MONTHS = 6
+
+
+def _shift_month(key, delta):
+    y, m = map(int, key.split("-"))
+    idx = y * 12 + m - 1 + delta
+    return f"{idx // 12:04d}-{idx % 12 + 1:02d}"
+
+
+def usage_vs_price(fills, vehicles):
+    """Did fuel use go up, down or stay flat when prices jumped? Compares average liters per month
+    in the BEFORE_MONTHS before PRICE_BASELINE_END with every month since, per vehicle, and splits
+    the change in monthly spend into a volume part (more/fewer liters at the old price) and a price
+    part (the new liters at the price difference)."""
+    start = PRICE_BASELINE_END[:7]
+    before_keys = [_shift_month(start, -i) for i in range(BEFORE_MONTHS, 0, -1)]
+    last = max(f["date"][:7] for f in fills)
+    after_keys, k = [], start
+    while k <= last:
+        after_keys.append(k)
+        k = _shift_month(k, 1)
+
+    def period(rows, keys):
+        sel = [f for f in rows if f["date"][:7] in keys]
+        liters = sum(f["liters"] or 0 for f in sel)
+        amount = sum(f["amount"] for f in sel)
+        n = len(keys)
+        return {"liters": liters / n, "amount": amount / n, "price": amount / liters if liters else None}
+
+    def compare(rows):
+        b, a = period(rows, before_keys), period(rows, after_keys)
+        change = (a["liters"] - b["liters"]) / b["liters"] * 100 if b["liters"] else None
+        volume = (a["liters"] - b["liters"]) * (b["price"] or 0)
+        price = a["liters"] * ((a["price"] or 0) - (b["price"] or 0))
+        if change is None:
+            verdict = "ไม่มีข้อมูลช่วงก่อน"
+        elif abs(change) < 5:
+            verdict = "ใช้เท่าเดิม"
+        else:
+            verdict = "ใช้เพิ่มขึ้น" if change > 0 else "ใช้ลดลง"
+        return {"before": b, "after": a, "liters_change": change, "verdict": verdict,
+                "spend_change": a["amount"] - b["amount"], "volume_effect": volume, "price_effect": price}
+
+    per_vehicle = []
+    for v in vehicles:
+        rows = [f for f in fills if f["vehicle"] == v["name"]]
+        per_vehicle.append({"name": v["name"], "missing_liters": v["missing_liters"], **compare(rows)})
+    # A vehicle with missing receipts makes its own before/after comparison unreliable, so the
+    # headline answer uses only vehicles whose log is complete.
+    complete = [v["name"] for v in vehicles if not v["missing_liters"]]
+    return {
+        "complete_names": complete,
+        "total_complete": compare([f for f in fills if f["vehicle"] in complete]),
+        "before_label": f"{_month_label(before_keys[0])} – {_month_label(before_keys[-1])}",
+        "after_label": f"{_month_label(after_keys[0])} – {_month_label(after_keys[-1])}",
+        "before_months": len(before_keys), "after_months": len(after_keys),
+        "total": compare(fills), "vehicles": per_vehicle,
+    }
 
 
 def build_page_data(path=FUEL_LOG):
@@ -193,6 +254,7 @@ def build_page_data(path=FUEL_LOG):
     recent = [m for m in months[-3:]]
     return {
         "fills": fills, "vehicles": vehicles, "months": months, "issues": issues,
+        "usage": usage_vs_price(fills, vehicles),
         "baseline": base, "latest_price": latest_price,
         "baseline_label": _month_label(PRICE_BASELINE_END[:7]),
         "kpi": {
