@@ -23,10 +23,6 @@ from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, RedirectResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
 from linebot.v3.messaging import ApiClient, Configuration, MessagingApi
-from openpyxl.chart import BarChart, Reference
-from openpyxl.chart.label import DataLabelList
-from openpyxl.utils import get_column_letter
-from openpyxl.worksheet.table import Table, TableStyleInfo
 from starlette.middleware.sessions import SessionMiddleware
 
 from categorize import get_categories, guess_category
@@ -250,195 +246,6 @@ def dashboard(request: Request):
     )
 
 
-def _period_filter(granularity, year, month, day):
-    if granularity == "day":
-        return "txn_date = %s", (date(year, month, day),)
-    if granularity == "month":
-        return "EXTRACT(year FROM txn_date) = %s AND EXTRACT(month FROM txn_date) = %s", (year, month)
-    return "EXTRACT(year FROM txn_date) = %s", (year,)
-
-
-def fetch_report_data(cur, granularity, year, month, day):
-    if granularity not in ("year", "month", "day"):
-        granularity = "year"
-
-    cur.execute(
-        """SELECT DISTINCT EXTRACT(year FROM txn_date)::int AS y
-           FROM slip_transactions
-           WHERE txn_date IS NOT NULL
-           ORDER BY 1 DESC"""
-    )
-    years = [r[0] for r in cur.fetchall()]
-    if not year:
-        year = years[0] if years else date.today().year
-
-    months = []
-    if granularity in ("month", "day"):
-        cur.execute(
-            """SELECT DISTINCT EXTRACT(month FROM txn_date)::int AS m
-               FROM slip_transactions
-               WHERE txn_date IS NOT NULL AND EXTRACT(year FROM txn_date) = %s
-               ORDER BY 1 DESC""",
-            (year,),
-        )
-        months = [r[0] for r in cur.fetchall()]
-        if not month:
-            month = months[0] if months else date.today().month
-
-    days = []
-    if granularity == "day":
-        cur.execute(
-            """SELECT DISTINCT EXTRACT(day FROM txn_date)::int AS d
-               FROM slip_transactions
-               WHERE txn_date IS NOT NULL AND EXTRACT(year FROM txn_date) = %s
-                     AND EXTRACT(month FROM txn_date) = %s
-               ORDER BY 1 DESC""",
-            (year, month),
-        )
-        days = [r[0] for r in cur.fetchall()]
-        if not day:
-            day = days[0] if days else 1
-
-    if granularity == "day":
-        cur.execute(
-            """SELECT to_char(txn_time, 'HH24:00') AS bucket,
-                      COALESCE(SUM(amount) FILTER (WHERE direction = 'expense'), 0) AS expense,
-                      COALESCE(SUM(amount) FILTER (WHERE direction = 'income'), 0) AS income
-               FROM slip_transactions
-               WHERE txn_date = %s AND direction IN ('expense', 'income')
-               GROUP BY 1
-               ORDER BY 1""",
-            (date(year, month, day),),
-        )
-    elif granularity == "month":
-        cur.execute(
-            """SELECT to_char(txn_date, 'DD') AS bucket,
-                      COALESCE(SUM(amount) FILTER (WHERE direction = 'expense'), 0) AS expense,
-                      COALESCE(SUM(amount) FILTER (WHERE direction = 'income'), 0) AS income
-               FROM slip_transactions
-               WHERE txn_date IS NOT NULL AND direction IN ('expense', 'income')
-                     AND EXTRACT(year FROM txn_date) = %s AND EXTRACT(month FROM txn_date) = %s
-               GROUP BY 1
-               ORDER BY 1""",
-            (year, month),
-        )
-    else:
-        cur.execute(
-            """SELECT to_char(date_trunc('month', txn_date), 'YYYY-MM') AS bucket,
-                      COALESCE(SUM(amount) FILTER (WHERE direction = 'expense'), 0) AS expense,
-                      COALESCE(SUM(amount) FILTER (WHERE direction = 'income'), 0) AS income
-               FROM slip_transactions
-               WHERE txn_date IS NOT NULL AND direction IN ('expense', 'income')
-                     AND EXTRACT(year FROM txn_date) = %s
-               GROUP BY 1
-               ORDER BY 1""",
-            (year,),
-        )
-    bucket_rows = cur.fetchall()
-
-    period_sql, period_params = _period_filter(granularity, year, month, day)
-
-    cur.execute(
-        f"""SELECT COALESCE(category, 'ไม่ระบุหมวด') AS category, SUM(amount) AS total
-            FROM slip_transactions
-            WHERE txn_date IS NOT NULL AND direction = 'expense' AND {period_sql}
-            GROUP BY 1
-            ORDER BY 2 DESC""",
-        period_params,
-    )
-    category_rows = [{"name": r[0], "total": float(r[1])} for r in cur.fetchall()]
-
-    cur.execute(
-        f"""SELECT COALESCE(receiver_name, 'ไม่ระบุ') AS receiver, SUM(amount) AS total
-            FROM slip_transactions
-            WHERE txn_date IS NOT NULL AND direction = 'expense' AND {period_sql}
-            GROUP BY 1
-            ORDER BY 2 DESC
-            LIMIT 5""",
-        period_params,
-    )
-    top_payees = [{"name": r[0], "total": float(r[1])} for r in cur.fetchall()]
-
-    bucket_chart = {
-        "labels": [r[0] for r in bucket_rows],
-        "expense": [float(r[1]) for r in bucket_rows],
-        "income": [float(r[2]) for r in bucket_rows],
-    }
-    total_expense = sum(bucket_chart["expense"])
-    total_income = sum(bucket_chart["income"])
-
-    if granularity == "day":
-        period_label = f"{day} {THAI_MONTHS.get(month, month)} {year}"
-    elif granularity == "month":
-        period_label = f"{THAI_MONTHS.get(month, month)} {year}"
-    else:
-        period_label = f"ปี {year}"
-
-    return {
-        "granularity": granularity, "years": years, "months": months, "days": days,
-        "year": year, "month": month, "day": day, "period_label": period_label,
-        "bucket_chart": bucket_chart, "category_rows": category_rows, "top_payees": top_payees,
-        "total_expense": total_expense, "total_income": total_income, "net": total_income - total_expense,
-    }
-
-
-def fetch_report_data_custom(cur, date_from, date_to):
-    d_from = date.fromisoformat(date_from)
-    d_to = date.fromisoformat(date_to)
-    bucket_expr = (
-        "to_char(date_trunc('month', txn_date), 'YYYY-MM')"
-        if (d_to - d_from).days > 62
-        else "to_char(txn_date, 'YYYY-MM-DD')"
-    )
-
-    cur.execute(
-        f"""SELECT {bucket_expr} AS bucket,
-                   COALESCE(SUM(amount) FILTER (WHERE direction = 'expense'), 0) AS expense,
-                   COALESCE(SUM(amount) FILTER (WHERE direction = 'income'), 0) AS income
-            FROM slip_transactions
-            WHERE txn_date BETWEEN %s AND %s AND direction IN ('expense', 'income')
-            GROUP BY 1
-            ORDER BY 1""",
-        (d_from, d_to),
-    )
-    bucket_rows = cur.fetchall()
-    bucket_chart = {
-        "labels": [r[0] for r in bucket_rows],
-        "expense": [float(r[1]) for r in bucket_rows],
-        "income": [float(r[2]) for r in bucket_rows],
-    }
-
-    cur.execute(
-        """SELECT COALESCE(category, 'ไม่ระบุหมวด') AS category, SUM(amount) AS total
-            FROM slip_transactions
-            WHERE txn_date BETWEEN %s AND %s AND direction = 'expense'
-            GROUP BY 1
-            ORDER BY 2 DESC""",
-        (d_from, d_to),
-    )
-    category_rows = [{"name": r[0], "total": float(r[1])} for r in cur.fetchall()]
-
-    cur.execute(
-        """SELECT COALESCE(receiver_name, 'ไม่ระบุ') AS receiver, SUM(amount) AS total
-            FROM slip_transactions
-            WHERE txn_date BETWEEN %s AND %s AND direction = 'expense'
-            GROUP BY 1
-            ORDER BY 2 DESC
-            LIMIT 5""",
-        (d_from, d_to),
-    )
-    top_payees = [{"name": r[0], "total": float(r[1])} for r in cur.fetchall()]
-
-    total_expense = sum(bucket_chart["expense"])
-    total_income = sum(bucket_chart["income"])
-
-    return {
-        "period_label": f"{d_from.isoformat()} ถึง {d_to.isoformat()}",
-        "bucket_chart": bucket_chart, "category_rows": category_rows, "top_payees": top_payees,
-        "total_expense": total_expense, "total_income": total_income, "net": total_income - total_expense,
-    }
-
-
 BANGKOK_TZ = timezone(timedelta(hours=7))
 UNCATEGORIZED = "ไม่ระบุหมวด"
 PERIOD_KEYS = ("cur", "prev", "ytd", "all")
@@ -645,163 +452,49 @@ def reports(request: Request, month: str = "", focus: str = "all"):
     )
 
 
-COLOR_EXPENSE = "C0392B"
+def _parse_report_range(date_from, date_to):
+    try:
+        d_from, d_to = date.fromisoformat(date_from), date.fromisoformat(date_to)
+    except ValueError:
+        raise HTTPException(400, "date_from / date_to ต้องเป็นวันที่รูปแบบ YYYY-MM-DD")
+    if d_from > d_to:
+        raise HTTPException(400, "date_from ต้องไม่เกิน date_to")
+    return d_from, d_to
 
 
-def _style_table_sheet(ws, df, table_name, currency_cols):
-    """Turn a freshly-written df sheet into a banded Excel Table with sane column widths and number formats."""
-    n_rows, n_cols = df.shape
-    last_row = n_rows + 1
-    ref = f"A1:{get_column_letter(n_cols)}{last_row}"
-    table = Table(displayName=table_name, ref=ref)
-    table.tableStyleInfo = TableStyleInfo(
-        name="TableStyleMedium9", showRowStripes=True, showFirstColumn=False, showLastColumn=False,
-    )
-    ws.add_table(table)
-
-    for col_name in currency_cols:
-        col_letter = get_column_letter(df.columns.get_loc(col_name) + 1)
-        for r in range(2, last_row + 1):
-            ws[f"{col_letter}{r}"].number_format = "#,##0.00"
-
-    for i, col_name in enumerate(df.columns, start=1):
-        max_len = max([len(str(col_name))] + [len(str(v)) for v in df[col_name].astype(str)])
-        ws.column_dimensions[get_column_letter(i)].width = min(max(max_len + 2, 10), 45)
-
-
-@app.get("/reports/export/excel")
-def reports_export_excel(
-    request: Request, granularity: str = "year", year: int = 0, month: int = 0, day: int = 0,
-    date_from: str = "", date_to: str = "",
-):
+@app.get("/reports/export/{kind}")
+def reports_export(request: Request, kind: str, date_from: str = "", date_to: str = ""):
     redirect = require_login(request)
     if redirect:
         return redirect
-
-    conn = db()
-    try:
-        with conn.cursor() as cur:
-            data = fetch_report_data(cur, granularity, year, month, day)
-            if date_from and date_to:
-                data.update(fetch_report_data_custom(cur, date_from, date_to))
-    finally:
-        conn.close()
-
-    summary_df = pd.DataFrame(
-        [
-            ("ช่วงเวลา", data["period_label"]),
-            ("รายจ่าย", data["total_expense"]),
-        ],
-        columns=["รายการ", "ค่า"],
-    )
-    category_df = pd.DataFrame(
-        [(c["name"], c["total"]) for c in data["category_rows"]], columns=["หมวด", "ยอด (บาท)"]
-    )
-    payee_df = pd.DataFrame(
-        [(i + 1, p["name"], p["total"]) for i, p in enumerate(data["top_payees"])],
-        columns=["อันดับ", "ผู้รับ", "ยอด (บาท)"],
-    )
-    bucket_df = pd.DataFrame(
-        {
-            "ช่วง": data["bucket_chart"]["labels"],
-            "รายจ่าย": data["bucket_chart"]["expense"],
-        }
-    )
-
-    buf = io.BytesIO()
-    with pd.ExcelWriter(buf, engine="openpyxl") as writer:
-        summary_df.to_excel(writer, sheet_name="สรุป", index=False)
-        category_df.to_excel(writer, sheet_name="ตามหมวด", index=False)
-        payee_df.to_excel(writer, sheet_name="Top ผู้รับเงิน", index=False)
-        bucket_df.to_excel(writer, sheet_name="กราฟ", index=False)
-
-        _style_table_sheet(writer.sheets["สรุป"], summary_df, "tbl_summary", ["ค่า"])
-        _style_table_sheet(writer.sheets["ตามหมวด"], category_df, "tbl_category", ["ยอด (บาท)"])
-        _style_table_sheet(writer.sheets["Top ผู้รับเงิน"], payee_df, "tbl_payee", ["ยอด (บาท)"])
-        _style_table_sheet(writer.sheets["กราฟ"], bucket_df, "tbl_bucket", ["รายจ่าย"])
-
-        if len(bucket_df):
-            bar = BarChart()
-            bar.type = "col"
-            bar.title = "รายจ่ายตามช่วงเวลา"
-            bar.legend = None
-            bar.y_axis.title = "บาท"
-            bar.y_axis.numFmt = "#,##0"
-            bar.width, bar.height = 24, 12
-            bar.gapWidth = 50
-            ws = writer.sheets["กราฟ"]
-            n = len(bucket_df) + 1
-            bar.add_data(Reference(ws, min_col=2, min_row=1, max_row=n), titles_from_data=True)
-            bar.set_categories(Reference(ws, min_col=1, min_row=2, max_row=n))
-            bar.series[0].graphicalProperties.solidFill = COLOR_EXPENSE
-            bar.dataLabels = DataLabelList()
-            bar.dataLabels.showVal = True
-            ws.add_chart(bar, f"{get_column_letter(bucket_df.shape[1] + 2)}2")
-
-        if len(category_df):
-            # category_rows already comes from SQL ORDER BY total DESC; horizontal bar
-            # reads top-to-bottom in that same order once the category axis is reversed.
-            cat_bar = BarChart()
-            cat_bar.type = "bar"
-            cat_bar.title = "รายจ่ายตามหมวด"
-            cat_bar.y_axis.numFmt = "#,##0"
-            cat_bar.x_axis.scaling.orientation = "maxMin"
-            cat_bar.width, cat_bar.height = 22, max(10, 2 * len(category_df))
-            cat_bar.gapWidth = 60
-            cat_bar.legend = None
-            ws2 = writer.sheets["ตามหมวด"]
-            n2 = len(category_df) + 1
-            cat_bar.add_data(Reference(ws2, min_col=2, min_row=1, max_row=n2), titles_from_data=True)
-            cat_bar.set_categories(Reference(ws2, min_col=1, min_row=2, max_row=n2))
-            cat_bar.series[0].graphicalProperties.solidFill = COLOR_EXPENSE
-            cat_bar.dataLabels = DataLabelList()
-            cat_bar.dataLabels.showVal = True
-            ws2.add_chart(cat_bar, f"{get_column_letter(category_df.shape[1] + 2)}2")
-    buf.seek(0)
-
-    filename = f"report_summary_{date.today().isoformat()}.xlsx"
-    return StreamingResponse(
-        buf,
-        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
-    )
-
-
-@app.get("/reports/export/pdf")
-def reports_export_pdf(
-    request: Request, granularity: str = "year", year: int = 0, month: int = 0, day: int = 0,
-    date_from: str = "", date_to: str = "",
-):
-    redirect = require_login(request)
-    if redirect:
-        return redirect
+    if kind not in ("excel", "pdf"):
+        raise HTTPException(404)
+    d_from, d_to = _parse_report_range(date_from, date_to)
 
     try:
-        from export_report import build_summary_pdf
+        import export_report
     except RuntimeError as e:
         raise HTTPException(500, str(e))
 
     conn = db()
     try:
         with conn.cursor() as cur:
-            data = fetch_report_data(cur, granularity, year, month, day)
-            if date_from and date_to:
-                data.update(fetch_report_data_custom(cur, date_from, date_to))
+            rep = export_report.fetch_period_report(cur, d_from, d_to)
     finally:
         conn.close()
 
     buf = io.BytesIO()
-    build_summary_pdf(
-        data["period_label"], data["total_expense"],
-        data["category_rows"], data["top_payees"], data["bucket_chart"], buf,
-    )
+    if kind == "excel":
+        export_report.build_report_xlsx(rep, buf)
+        ext, media_type = "xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    else:
+        export_report.build_report_pdf(rep, buf)
+        ext, media_type = "pdf", "application/pdf"
     buf.seek(0)
-
-    filename = f"report_summary_{date.today().isoformat()}.pdf"
     return StreamingResponse(
         buf,
-        media_type="application/pdf",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        media_type=media_type,
+        headers={"Content-Disposition": f'attachment; filename="{export_report.report_filename(rep, ext)}"'},
     )
 
 

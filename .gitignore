@@ -13,3 +13,5 @@ ledger_report.pdf
 seed_user.sql
 update_roles.sql
 add_*.sql
+expense_report_*.xlsx
+expense_report_*.pdf
